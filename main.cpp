@@ -84,7 +84,7 @@ LoadBuffer_t LoadBuffer;
 typedef __int64(__fastcall* CbufAddText_t)(__int64 playerNum, const char* buff);
 CbufAddText_t CbufAddText;
 
-typedef __int64(__fastcall* SetScreen_t)(char screenNum);
+typedef __int64(__fastcall* SetScreen_t)(__int64 screenNum);
 SetScreen_t SetScreen;
 
 typedef __int64(__fastcall* LiveStorage_ParseKeysTxt_t)(const char* key);
@@ -553,46 +553,19 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			printf("bp2: %llx %llx %llx\n", exceptionAddr, idaExceptionAddr, returnAddr);
 			printf("%s strlen: %d\n", (char*)info->ContextRecord->Rdx, strlen((char*)info->ContextRecord->Rdx));
 
-			/*
 			if (strcmp((char*)info->ContextRecord->Rdx, "cmd iwr 2 1\n") == 0)
 				multiplayerCounter += 1;
-			*/
 
-			if (strcmp((char*)info->ContextRecord->Rdx, "clearKeyStates\n") == 0)
-				multiplayerCounter += 1;
-
-			if (multiplayerCounter == 8 && !multiplayerEnabled)
+			if (multiplayerCounter == 2 && !multiplayerEnabled)
 			{
-				uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
-				*(DWORD64*)(baseAddr + 0x1454dc68 + 0x1000) = 1;
-				*(DWORD64*)(baseAddr + 0x18cff450 + 0x1000) = 1;
-				*(DWORD64*)(baseAddr + 0x18d093e8 + 0x1000) = 1;
-				*(DWORD64*)(baseAddr + 0xc5cd1a8 + 0x1000) = 11;
-				//SetScreen(11);
-
-				LiveStorage_ParseKeysTxt("mp_common,1,LKBcjAtLFtrhGQqXZP3GQN2MXbGe4yBA4CJ8KK+Tmyw=\n"
-					"zm_common,1,uVkxOTxN2vKCJHt2piY5tGqy33LKZ0dKlKizutZifuI=\n"
-					"wz_common,1,qYOw3RHpf/4LoNqha7D8w0l1uJs1a8f1GXvz9RSlcpc=\n"
-					"cp_common,1,1Xms8bivDnvtle9GlNy3IHsDBYi5q6kSJTqMJUZbUBo=");
-				LiveStorage_ParseKeysTxt2("mp_common,1,LKBcjAtLFtrhGQqXZP3GQN2MXbGe4yBA4CJ8KK+Tmyw=\n"
-					"zm_common,1,uVkxOTxN2vKCJHt2piY5tGqy33LKZ0dKlKizutZifuI=\n"
-					"wz_common,1,qYOw3RHpf/4LoNqha7D8w0l1uJs1a8f1GXvz9RSlcpc=\n"
-					"cp_common,1,1Xms8bivDnvtle9GlNy3IHsDBYi5q6kSJTqMJUZbUBo=");
-
-
-			/*
 				*(DWORD64*)(baseAddr + 0xa85f9c8 + 0x1000) = 1;
-				SetScreen(10);
+				*(DWORD64*)(baseAddr + 0x2ec4fc8 + 0x1000) = 10;
 				LiveStorage_ParseKeysTxt("mp_common,1,LKBcjAtLFtrhGQqXZP3GQN2MXbGe4yBA4CJ8KK+Tmyw=");
 				LiveStorage_ParseKeysTxt2("mp_common,1,LKBcjAtLFtrhGQqXZP3GQN2MXbGe4yBA4CJ8KK+Tmyw=");
 
-				// CbufAddText(0, "disconnect\n");
 				// if we call cbufaddtext in here we crash since we are basically creating an infintely loop
-			*/
-
 				info->ContextRecord->Rdx = (DWORD64)disconnectCvar;
-
-				printf("we are executing!!!\n");
+				
 				multiplayerEnabled = true;
 			}
 
@@ -826,7 +799,6 @@ DWORD WINAPI main(LPVOID lpReserved)
 	if (MH_CreateHook(CheckRemoteDebuggerPresentAddr, &CheckRemoteDebuggerPresentFunc, reinterpret_cast<LPVOID*>(&CheckRemoteDebuggerPresentOrig)) != MH_OK) { printf("hook didn't work\n"); }
 	if (MH_EnableHook(CheckRemoteDebuggerPresentAddr) != MH_OK) { printf("hook didn't work\n"); }
 
-	/*
 	baseFuncAddr = reinterpret_cast<char*>(baseAddr + 0x177833f + 0x1000);
 	placeHardwareBP(baseFuncAddr, 0, Condition::Execute);
 
@@ -849,15 +821,6 @@ DWORD WINAPI main(LPVOID lpReserved)
 	LiveStorage_ParseKeysTxt = reinterpret_cast<LiveStorage_ParseKeysTxt_t>(baseAddr + 0x1011720);
 	LiveStorage_ParseKeysTxt2 = reinterpret_cast<LiveStorage_ParseKeysTxt2_t>(baseAddr + 0x1012900);
 	SetScreen = reinterpret_cast<SetScreen_t>(baseAddr + 0x105D9C0);
-	*/
-
-	char* addr3 = reinterpret_cast<char*>(baseAddr + 0x821b8e0 + 0x1000);
-	placeHardwareBP(addr3, 1, Condition::Execute);
-
-	CbufAddText = reinterpret_cast<CbufAddText_t>(baseAddr + 0x821b8e0 + 0x1000);
-	LiveStorage_ParseKeysTxt = reinterpret_cast<LiveStorage_ParseKeysTxt_t>(baseAddr + 0x8908280 + 0x1000);
-	LiveStorage_ParseKeysTxt2 = reinterpret_cast<LiveStorage_ParseKeysTxt2_t>(baseAddr + 0x8909c30 + 0x1000);
-	SetScreen = reinterpret_cast<SetScreen_t>(baseAddr + 0xa6c1db0 + 0x1000);
 
 	printf("hooked %llx\n", baseFuncAddr);
 	return 0;
