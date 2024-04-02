@@ -1256,43 +1256,8 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	__debugbreak();
 */
 
-/*
-	static int counter = 0;
-
-	if (rbpOffset == 0x68)
-		counter++;
-
-	if (counter == 3)
-	{
-		printf("TODO: fix bug cause we cant seem to find the potential checksum location\n");
-		while (true)
-			__debugbreak();
-	}
-	if (calculatedChecksum == 0xb6e19f02)
-	{
-		printf("wtf rbp is 0??????????????????????????????????????????????????????\n");
-		printf("we fucked up on the jmp instruction");
-		while (true)
-			__debugbreak();
-	}
-
-	if (calculatedChecksum == 0x79d397c8)
-	{
-		printf("fucked up double text pointer, fix this now!!!!!\n");
-		while (true)
-			__debugbreak();
-	}
-
-	// 35c02fdf
-	if (calculatedChecksum == 0x0)
-	{
-		printf("check out whats wrong with x64dbg");
-		while (true)
-			__debugbreak();
-	}
-*/	
-
 	bool doubleTextChecksum = false;
+	uint64_t* previousResultPtr = nullptr;
 	if (ptrOffset == 0 && rbpOffset < 0x90)
 	{
 		uint64_t* textPtr = (uint64_t*)((char*)ptrStack+rbpOffset + (rbpOffset % 0x8)); // make sure rbpOffset is aligned by 8 bytes
@@ -1311,17 +1276,36 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 				fprintf(logFile, "result: %llx\n", derefResult);
 				fflush(logFile);
 
-				if (derefResult == 0xffffffffffffffff && pointerCounter == 3)
-				{
-					// TODO: redo this, we should on double pointers just take the .text pointer above 0xffffffffffffffff
-					doubleTextChecksum = true;
+				// TODO: redo this, we should on double pointers just take the .text pointer above 0xffffffffffffffff
+				// for the other checksums that crash for some reason we could take a complete stack dump and 
+				// compare it with the one that will crash to see if theres any details that we are missing
 
-					printf("found double pointer text section\n", derefResult);
-					fprintf(logFile, "found double pointer text section\n", derefResult);
-					fflush(logFile);
+				// we can store the ptr above 0xffffffffffffffff and then use it in our originalchecksum check
+				if (derefResult == 0xffffffffffffffff)
+				{
+					if (pointerCounter > 2)
+					{
+						//SuspendAllThreads();
+						//__debugbreak();
+
+						doubleTextChecksum = true;
+
+						printf("found double pointer text section\n", derefResult);
+						fprintf(logFile, "found double pointer text section\n", derefResult);
+						fflush(logFile);
+
+						// because textptr will be pointing at 0xffffffffffffffff, increment it once 
+						// so we are pointing to the correct checksum location
+
+						// TODO: remove this, doesnt do anything, confirm with checksum 0x79d397c8
+						// since we use previousResultPtr which doesnt rely on this
+						textPtr++;
+					}
 
 					break;
 				}
+
+				previousResultPtr = textPtr;
 			}
 
 			textPtr--;
@@ -1416,7 +1400,10 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 
 			if (ptrOffset == 0 && rbpOffset < 0x90)
 			{
-				originalChecksum = *(uint32_t*)derefPtr; 
+				if (doubleTextChecksum)
+					originalChecksum = **(uint32_t**)previousResultPtr; 
+				else
+					originalChecksum = *(uint32_t*)derefPtr; 
 			}
 			else
 			{
@@ -1424,11 +1411,14 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 				originalChecksumPtr = (uint32_t*)((char*)derefPtr+ptrOffset*4);
 			}
 			
+			/*
 			// if its a double text pointer look one more time for the checksum
 			if (doubleTextChecksum)
 				doubleTextChecksum = false;
 			else
 				break;
+			*/
+			break;
 		}
 
 		textPtr--;
