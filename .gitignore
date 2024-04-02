@@ -1,2 +1,5 @@
 .vs/
 x64/
+.cache/
+compile_commands.json
+*.tmp
