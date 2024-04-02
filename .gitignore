@@ -4,3 +4,4 @@ x64/
 compile_commands.json
 *.tmp
 *.dll
+winDlls/
