@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -23,7 +15,7 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{bd0b82cd-962d-46f6-b818-b297a0917981}</ProjectGuid>
     <RootNamespace>defaulthook</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -72,19 +64,19 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>D:\Games\CODCWREAL\Call of Duty Black Ops Cold War</OutDir>
+    <OutDir>D:\Games\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>D:\Games\CODCWREAL\Call of Duty Black Ops Cold War</OutDir>
+    <OutDir>D:\Games\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>D:\Games\CODCWREAL\Call of Duty Black Ops Cold War</OutDir>
+    <OutDir>E:\SteamLibrary\steamapps\common\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>D:\Games\CODCWREAL\Call of Duty Black Ops Cold War</OutDir>
+    <OutDir>E:\SteamLibrary\steamapps\common\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -100,6 +92,7 @@
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -107,6 +100,7 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>$(ProjectDir)\powrprof.def</ModuleDefinitionFile>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -124,6 +118,7 @@
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -133,13 +128,14 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>$(ProjectDir)\powrprof.def</ModuleDefinitionFile>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;DEFAULTHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;_DEBUG;DEFAULTHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS;ASMJIT_STATIC</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
@@ -148,6 +144,10 @@
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT;$(ProjectDir)\libs\asmjit\src</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <BasicRuntimeChecks />
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -155,6 +155,7 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>$(ProjectDir)\powrprof.def</ModuleDefinitionFile>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>Winmm.lib;ntdll.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -172,6 +173,8 @@
       <FloatingPointExceptions>true</FloatingPointExceptions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -181,16 +184,78 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>$(ProjectDir)\powrprof.def</ModuleDefinitionFile>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>Winmm.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64assembler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64builder.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64compiler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64emithelper.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64formatter.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64func.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64instapi.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64instdb.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64operand.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\a64rapass.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\arm\armformatter.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\archtraits.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\assembler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\builder.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\codeholder.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\codewriter.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\compiler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\constpool.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\cpuinfo.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\emithelper.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\emitter.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\emitterutils.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\environment.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\errorhandler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\formatter.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\func.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\funcargscontext.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\globals.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\inst.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\instdb.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\jitallocator.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\jitruntime.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\logger.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\operand.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\osutils.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\ralocal.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\rapass.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\rastack.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\string.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\support.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\target.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\type.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\virtmem.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\zone.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\zonehash.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\zonelist.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\zonestack.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\zonetree.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\core\zonevector.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86assembler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86builder.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86compiler.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86emithelper.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86formatter.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86func.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86instapi.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86instdb.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86operand.cpp" />
+    <ClCompile Include="libs\asmjit\src\asmjit\x86\x86rapass.cpp" />
     <ClCompile Include="libs\minhook\src\buffer.c" />
     <ClCompile Include="libs\minhook\src\hde\hde32.c" />
     <ClCompile Include="libs\minhook\src\hde\hde64.c" />
     <ClCompile Include="libs\minhook\src\hook.c" />
+    <ClCompile Include="libs\patterns\Hooking.Patterns.cpp" />
     <ClCompile Include="libs\minhook\src\trampoline.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="restorentdll.cpp" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="powrprof.asm" />
@@ -198,6 +263,98 @@
   <ItemGroup>
     <ClInclude Include="gamestructs.h" />
     <ClInclude Include="gdll.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\a64.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64archtraits_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64assembler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64builder.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64compiler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64emithelper_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64emitter.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64formatter_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64func_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64globals.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64instapi_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64instdb.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64instdb_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64operand.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\a64rapass_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\armformatter_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\armglobals.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\armoperand.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\arm\armutils.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\asmjit-scope-begin.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\asmjit-scope-end.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\asmjit.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\api-build_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\api-config.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\archcommons.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\archtraits.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\assembler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\builder.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\builder_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\codebuffer.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\codeholder.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\codewriter_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\compiler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\compilerdefs.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\constpool.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\cpuinfo.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\emithelper_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\emitter.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\emitterutils_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\environment.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\errorhandler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\formatter.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\formatter_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\func.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\funcargscontext_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\globals.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\inst.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\instdb_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\jitallocator.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\jitruntime.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\logger.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\misc_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\operand.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\osutils.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\osutils_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\raassignment_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\rabuilders_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\radefs_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\ralocal_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\rapass_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\rastack_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\string.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\support.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\support_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\target.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\type.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\virtmem.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zone.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zonehash.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zonelist.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zonestack.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zonestring.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zonetree.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\core\zonevector.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86archtraits_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86assembler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86builder.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86compiler.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86emithelper_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86emitter.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86formatter_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86func_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86globals.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86instapi_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86instdb.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86instdb_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86opcode_p.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86operand.h" />
+    <ClInclude Include="libs\asmjit\src\asmjit\x86\x86rapass_p.h" />
     <ClInclude Include="libs\minhook\include\MinHook.h" />
     <ClInclude Include="libs\minhook\src\buffer.h" />
     <ClInclude Include="libs\minhook\src\hde\hde32.h" />
@@ -205,9 +362,12 @@
     <ClInclude Include="libs\minhook\src\hde\pstdint.h" />
     <ClInclude Include="libs\minhook\src\hde\table32.h" />
     <ClInclude Include="libs\minhook\src\hde\table64.h" />
+    <ClInclude Include="libs\patterns\Hooking.Patterns.h" />
     <ClInclude Include="libs\minhook\src\trampoline.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="notes.h" />
+    <ClInclude Include="restorentdll.h" />
+    <ClInclude Include="utils.h" />
     <ClInclude Include="winstructs.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

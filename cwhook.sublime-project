@@ -1,0 +1,43 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+		}
+	],
+	"settings":
+	{
+		"LSP":
+		{
+			"clangd":
+			{
+				"enabled": true,
+			},
+		},
+	},
+	"build_systems":
+	[
+		{
+			"name": "make",
+			"file_regex": "^(.+)\\((\\d+),(\\d+)\\):\\s((warning|error).+)$",
+			"working_dir": "$project_path/",
+			"shell":true,
+			  "cmd":
+			  [
+			      "E:/community/MSBuild/Current/Bin/amd64/MSBuild.exe",
+			      //"/t:Clean;Rebuild",
+			      "/m",
+			      "/verbosity:quiet",
+			//      "-logger:C:/Projects/CWHook/CompileCommandsJson.dll",
+			      //"defaulthook.sln",
+			//      "midfunctionhook.sln",
+			      "/clp:ErrorsOnly",
+			      "/property:Configuration=Debug",
+			      "&&",
+			      "start",
+			      "run.bat"
+			      //"E:/SteamLibrary/steamapps/common/BOCW/BlackOpsColdWar.exe",
+			  ],
+		}
+	]
+}

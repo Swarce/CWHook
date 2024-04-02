@@ -1,28 +1,26 @@
 #pragma once
 
-#include <Windows.h>
-#include <winternl.h>
-#include <filesystem>
-#include <string.h>
-#include <stdio.h>
-#include <vector>
-#include <intrin.h>
-#include <TlHelp32.h>
-#include <string>
-#include <string_view>
-#include <iostream>
+#define ResumeFlag 0x10000
 
+/*
 #define ProcessDebugPort 7
 #define ProcessDebugObjectHandle 30
 #define ProcessDebugFlags 31
+#define ProcessHandleTracing 32
 #define ProcessImageFileNameWin32 43
+
+#define THREAD_CREATE_FLAGS_SKIP_THREAD_ATTACH 0x00000002
+#define THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER 0x00000004
+#define THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE 0x00000040
 
 #define SystemHandleInformation 0x20
 #define SystemHandleInformationEx 0x38
+*/
 
 //#define ThreadHideFromDebugger 0x11
 
-#define ResumeFlag 0x10000
+
+/*
 
 typedef struct _SYSTEM_HANDLE
 {
@@ -102,3 +100,26 @@ typedef enum _THREADINFOCLASS
     MaxThreadInfoClass
 } THREADINFOCLASS;
 }
+
+typedef struct _PS_ATTRIBUTE
+{
+    ULONG_PTR Attribute;
+    SIZE_T Size;
+    union
+    {
+        ULONG_PTR Value;
+        PVOID ValuePtr;
+    };
+    PSIZE_T ReturnLength;
+} PS_ATTRIBUTE, * PPS_ATTRIBUTE;
+
+typedef NTSTATUS(NTAPI* PUSER_THREAD_START_ROUTINE)(
+    _In_ PVOID ThreadParameter
+);
+
+typedef struct _PS_ATTRIBUTE_LIST
+{
+    SIZE_T TotalLength;
+    PS_ATTRIBUTE Attributes[1];
+} PS_ATTRIBUTE_LIST, * PPS_ATTRIBUTE_LIST;
+*/

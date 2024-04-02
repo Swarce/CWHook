@@ -1,4 +1,4 @@
-#include <Windows.h>
+#include <windows.h>
 #include "main.h"
 
 #pragma region Proxy
@@ -405,8 +405,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		setupFunctions();
 		module = hModule;
 
+		DisableThreadLibraryCalls(hModule);
+		main();
 		//CreateThread(nullptr, 0, main, hModule, 0, nullptr);
-		main(nullptr);
 
 		break;
 	case DLL_PROCESS_DETACH:

@@ -16,31 +16,35 @@ attaching still possible at this bp
 baseFuncAddr = reinterpret_cast<char*>(baseAddr + 0x177833f + 0x1000);
 placeHardwareBP(baseFuncAddr, 0, Condition::ReadWrite);
 
-maybe openprocess fucks it? or other threads getting started??
-maybe we arent cleaning up after ourselves? (anti-debug.checkpoint)
-
 https://learn.microsoft.com/en-us/windows/win32/debug/process-functions-for-debugging
-CreateProcess: This function is used to start a process and debug it. 
-The fdwCreate parameter of CreateProcess is used to specify the type of debugging operation. 
-If the DEBUG_PROCESS flag is specified for the parameter, a debugger debugs the new process and 
-all of the process's descendants, provided that the descendants are created without the DEBUG_PROCESS flag. 
-If both the DEBUG_PROCESS and DEBUG_ONLY_THIS_PROCESS flags are specified, a debugger debugs the new process 
-but none of its descendants
+CreateProcess DEBUG_PROCESS flag and/or DEBUG_ONLY_THIS_PROCESS flag
 
+
+Things we tried:
+Remove VEH's
+Restore NTDLL Dbg functions
+Restore our hooks after bp
+Clear up tls callbacks after bp
+Hook DebugActiveProcess
+Hook CheckRemoteDebuggerPresent
+Hook NtQueryInformationThread to remove ThreadHideFromDebugger
+Hook NtSetInformationThread to remove ThreadHideFromDebugger
+Hook NtCreateThreadEx to remove THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER
+Hook NtCreateProcessEx
+Hook CreateProcessW and CreateProcessA for DEBUG_ONLY_THIS_PROCESS and DEBUG_PROCESS
+SizeOfStackReserve does not get changed
+reverse Kernel32ThreadInitThunkFunction function ptr being replaced
+Hook NtSetInformationJobObject & NtAssignProcessToJobObject
+No nt job objects get created.
+Checked if SuppressDebugMsg is being set in the TEB
+
+
+First call to NtAllocateVirtualMemory allocates a private allocated chunk.
+Ntdll NtSetInformationThread and other functions get inserted into the chunk.
+NtSetInformationThread gets called from the chunk to hide the main thread from debuggers.
 */
 
-/* handle detection
-
-CreateToolhelp32Snapshot
-FindWindow
-GetHandleInformation
-OpenProcess
-FindProcessId
-GetProcessId
-
-*/
-
-/* window detection
-
-
+/* detection methods
+calling RestoreNtdllDbgFunctions early will crash the game eventually 
+because they check if the ntdll dbg functions got restored
 */

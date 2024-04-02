@@ -1,4 +1,4 @@
 #pragma once
 
-DWORD WINAPI main(LPVOID lpReserved);
+int main();
 HMODULE module;
