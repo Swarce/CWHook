@@ -1276,11 +1276,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 				fprintf(logFile, "result: %llx\n", derefResult);
 				fflush(logFile);
 
-				// TODO: redo this, we should on double pointers just take the .text pointer above 0xffffffffffffffff
-				// for the other checksums that crash for some reason we could take a complete stack dump and 
-				// compare it with the one that will crash to see if theres any details that we are missing
-
-				// we can store the ptr above 0xffffffffffffffff and then use it in our originalchecksum check
+				// store the ptr above 0xffffffffffffffff and then use it in our originalchecksum check
 				if (derefResult == 0xffffffffffffffff)
 				{
 					if (pointerCounter > 2)
@@ -1332,16 +1328,6 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		}
 	}
 
-	//if (calculatedChecksum == 0xa168f6c9) // double text pointer bug
-	/*
-	if (calculatedChecksum == 0x6d992ffb)
-	{
-		printf("TODO: fix bug cause we cant seem to find the potential checksum location\n");
-		while (true)
-			__debugbreak();
-	}
-	*/
-
 	// find calculatedChecksumPtr, we will overwrite this later with the original checksum
 	for (int i=0; i < 80; i++)
 	{
@@ -1374,18 +1360,9 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		calculatedReversedChecksumPtr--;
 	}
 
-	// TODO: add remainder from rbpOffset % 0x8 to align rbpOffset
-	//if (rbpOffset >= 0x100)
-	//	rbpOffset = 0x120;
-
 	uint64_t* textPtr = (uint64_t*)((char*)ptrStack+rbpOffset + (rbpOffset % 0x8)); // add remainder to align ptr
 	uint32_t originalChecksum = NULL;
 	uint32_t* originalChecksumPtr = nullptr;
-
-	// TODO: this causes us to crash on checksums where the .text pointer after the first one actually has the checksum
-	// on calculatedChecksum 0xa168f6c9 for example (0x7FF6423FDAF9)
-
-	// count text pointers til we find the 0xFFFFFFFFFF one?
 
 	// searching for a .text pointer that points to the original checksum, upwards from the rbp	
 	for (int i=0; i < 10; i++)
@@ -1411,13 +1388,6 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 				originalChecksumPtr = (uint32_t*)((char*)derefPtr+ptrOffset*4);
 			}
 			
-			/*
-			// if its a double text pointer look one more time for the checksum
-			if (doubleTextChecksum)
-				doubleTextChecksum = false;
-			else
-				break;
-			*/
 			break;
 		}
 
@@ -1427,15 +1397,12 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	*calculatedChecksumPtr = (uint32_t)originalChecksum;
 	*calculatedReversedChecksumPtr = reverse_bytes((uint32_t)originalChecksum);
 
-	// TODO: for big intact we need to keep overwriting 4 more times
+	// for big intact we need to keep overwriting 4 more times
 	uint32_t* tmpOriginalChecksumPtr = originalChecksumPtr;
 	uint32_t* tmpCalculatedChecksumPtr = calculatedChecksumPtr;
 	uint32_t* tmpReversedChecksumPtr = calculatedReversedChecksumPtr;
 	if (originalChecksumPtr != nullptr)
 	{
-		//SuspendAllThreads();
-		//__debugbreak();
-
 		for (int i=0; i <= ptrOffset; i++)
 		{
 			*tmpCalculatedChecksumPtr = *(uint32_t*)tmpOriginalChecksumPtr;
