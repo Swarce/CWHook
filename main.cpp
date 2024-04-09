@@ -37,6 +37,10 @@ const uint64_t StartOfBinary = 0x7FF626C70000;
 
 FILE* logFile;
 
+std::vector<intactChecksumHook> intactchecksumHooks;
+std::vector<intactBigChecksumHook> intactBigchecksumHooks;
+std::vector<splitChecksumHook> splitchecksumHooks;
+
 std::vector<PVOID> VectoredExceptions;
 
 HANDLE ntdllFileHandle = nullptr;
@@ -1228,9 +1232,57 @@ uint32_t reverse_bytes(uint32_t bytes)
     return aux;
 }
 
-//void fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance)
+std::vector<uint32_t> calculatedChecksumLocations = {
+	0xb68dfec7,
+	0x2d3ef41b,
+	0x70081cc,
+	0x9c446f9c,
+	0xb20c819e,
+	0x3ba90c3e,
+	0xf39e4805,
+	0xeea2a516,
+	0xbd1e3d27,
+};
+
+std::vector<uint32_t> runtimeChecksumLocations = {};
+
 int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
 {
+	// fix checksums here, else thread true memcpy attempt
+	// seems like its working but eventually dies because arxan at some fixes the checksums and checksums in general dont get called so much
+	// it does make the game run almost every time now
+	{
+		for (int i=0; i < intactchecksumHooks.size(); i++)
+		{
+			DWORD old_protect{};
+
+			VirtualProtect(intactchecksumHooks[i].functionAddress, sizeof(uint8_t) * 7, PAGE_EXECUTE_READWRITE, &old_protect);
+			memcpy(intactchecksumHooks[i].functionAddress, intactchecksumHooks[i].buffer, sizeof(uint8_t) * 7);
+			VirtualProtect(intactchecksumHooks[i].functionAddress, sizeof(uint8_t) * 7, old_protect, &old_protect);
+			FlushInstructionCache(GetCurrentProcess(), intactchecksumHooks[i].functionAddress, sizeof(uint8_t) * 7);
+		}
+
+		for (int i=0; i < intactBigchecksumHooks.size(); i++)
+		{
+			DWORD old_protect{};
+			
+			VirtualProtect(intactBigchecksumHooks[i].functionAddress, sizeof(uint8_t) * 10, PAGE_EXECUTE_READWRITE, &old_protect);
+			memcpy(intactBigchecksumHooks[i].functionAddress, intactBigchecksumHooks[i].buffer, sizeof(uint8_t) * 10);
+			VirtualProtect(intactBigchecksumHooks[i].functionAddress, sizeof(uint8_t) * 10, old_protect, &old_protect);
+			FlushInstructionCache(GetCurrentProcess(), intactBigchecksumHooks[i].functionAddress, sizeof(uint8_t) * 10);
+		}
+
+		for (int i=0; i < splitchecksumHooks.size(); i++)
+		{
+			DWORD old_protect{};
+			
+			VirtualProtect(splitchecksumHooks[i].functionAddress, sizeof(uint8_t) * 8, PAGE_EXECUTE_READWRITE, &old_protect);
+			memcpy(splitchecksumHooks[i].functionAddress, splitchecksumHooks[i].buffer, sizeof(uint8_t) * 8);
+			VirtualProtect(splitchecksumHooks[i].functionAddress, sizeof(uint8_t) * 8, old_protect, &old_protect);
+			FlushInstructionCache(GetCurrentProcess(), splitchecksumHooks[i].functionAddress, sizeof(uint8_t) * 8);
+		}
+	}
+
 	static int fixChecksumCalls = 0;
 	fixChecksumCalls++;
 
@@ -1252,6 +1304,71 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	uint32_t* calculatedChecksumPtr = (uint32_t*)((char*)ptrStack+0x120); // 0x120 is a good starting point to decrement downwards to find the calculated checksum on the stack
 	uint32_t* calculatedReversedChecksumPtr = (uint32_t*)((char*)ptrStack+0x120); // 0x120 is a good starting point to decrement downwards to find the calculated checksum on the stack
 
+	// TODO: maybe norrow it down to only a few ones and then do some investigations on them?
+	/*
+	if (calculatedChecksum == 0xbd1e3d27 && fixChecksumCalls == 9)
+	{
+		//SuspendAllThreads();
+		//__debugbreak();
+		printf("check?????????????\n");
+		fprintf(logFile, "check?????????????\n");
+		fflush(logFile);
+	}
+
+	if (calculatedChecksum == 0xb44aed1 && fixChecksumCalls == 9)
+	{
+		//SuspendAllThreads();
+		//__debugbreak();
+		printf("check?????????????\n");
+		fprintf(logFile, "check?????????????\n");
+		fflush(logFile);
+	}
+	*/
+
+/*
+	static bool allChecksumsAreTheSame = false;
+	if (fixChecksumCalls <= 9)
+	{
+		bool checksumsAreTheSame = true;
+		runtimeChecksumLocations.push_back(calculatedChecksum);
+		for (int i=0; i < runtimeChecksumLocations.size(); i++)
+		{
+			if (runtimeChecksumLocations[i] != calculatedChecksumLocations[i])
+				checksumsAreTheSame = false;
+		}
+
+		if (checksumsAreTheSame && runtimeChecksumLocations.size() == 9)
+		{
+			printf("check?????????????\n");
+			fprintf(logFile, "check?????????????\n");
+			fflush(logFile);
+			allChecksumsAreTheSame = true;
+			
+			//SuspendAllThreads();
+			//__debugbreak();
+		}
+	}
+
+	if (fixChecksumCalls >= 9 && allChecksumsAreTheSame)
+	{
+		printf("works\n");
+		getchar();
+	}
+
+*/
+
+	// TODO: implement a stack dumper that dumps 0x300 up and down from rbp
+	// should also dereference .text pointers and dump that memory too like a small chunk, 0x30 ish?
+	// compare our working/crashing checksum dumps with the stack this time
+	// if nothing is different then we are clearly getting screwed over by not finding every checksum
+
+	// try hooking gettickcount64, gettickcount, QueryPerformanceCounter to always return the same starting value.
+	// maybe we can force the same checksum routines to always run then?
+
+	// if checksum is the reason we would need to create a automated program with python that launches the game for us
+	// we basically put a hwbp on each checksum, wait for the game to crash or run and then close it, 
+	// we save the std vector on every element to a file, we can put that file into a folder where each folde represents each checksum
+	// this obviously is gonna take a really long time but that would be one way of finding every possible checksum check
 /*
 	SuspendAllThreads();
 	__debugbreak();
@@ -1399,6 +1516,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	*calculatedReversedChecksumPtr = reverse_bytes((uint32_t)originalChecksum);
 
 	// for big intact we need to keep overwriting 4 more times
+	// seems to still run even if we comment this out wtf?
 	uint32_t* tmpOriginalChecksumPtr = originalChecksumPtr;
 	uint32_t* tmpCalculatedChecksumPtr = calculatedChecksumPtr;
 	uint32_t* tmpReversedChecksumPtr = calculatedReversedChecksumPtr;
@@ -1493,7 +1611,7 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 				// we cant disable the tls callbacks because the game checks for inlined hooks
 				// allows for veh and regular dll injections to work
-				// disableTlsCallbacks();
+				disableTlsCallbacks();
 			}
 
 			if (strcmp((char*)info->ContextRecord->Rdx, "cmd iwr 2 1\n") == 0)
@@ -1539,6 +1657,15 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 #define tlsCallbackJmpChecksum 0
 
 			printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
+			fprintf(logFile, "bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
+			fflush(logFile);
+
+			Sleep(5000);
+
+			//if (counter == 59)
+			//{
+			//	SuspendAllThreads();
+			//}
 
 #if tlsJMPchecksumPrintAddress
 			if (counter == 1)
@@ -1738,6 +1865,7 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 				size_t intactCount = locationsIntact.size();
 				size_t intactBigCount = locationsIntactBig.size();
 				size_t splitCount = locationsSplit.size();
+				const size_t allocationSize = sizeof(uint8_t) * 128;
 
 				printf("p %d\n", intactCount);
 				printf("p %d\n", intactBigCount);
@@ -1746,13 +1874,12 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 				// TODO: refactor this later so we for loop through all the address locations
 				// and only do things based on the differences between every checksum type
 
-				#if 1
 				// intact
 				for (int i=0; i < intactCount; i++)
 				{
 
-				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), sizeof(uint8_t) * 128);
-				memset(asmStubLocation, 0x90, sizeof(uint8_t) * 128);
+				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+				memset(asmStubLocation, 0x90, allocationSize);
 				void* functionAddress = locationsIntact.get(i).get<void*>(0); // locationsIntact.get(i)
 				uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
 
@@ -1857,15 +1984,22 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
 				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
 
+				// temporary way to test if this would get us into the game all the time
+				// we basically overwrite at a set small time the instructions from a different thread cause
+				// arxan is currently undoing our checksum fixes
+				intactChecksumHook intactChecksum;
+				intactChecksum.functionAddress = (uint64_t*)functionAddress;
+				memcpy(intactChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * 7);
+				intactchecksumHooks.push_back(intactChecksum);
+
 				}
-				#endif
 
 				// big intact
 				for (int i=0; i < intactBigCount; i++)
 				{
 
-				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), sizeof(uint8_t) * 128);
-				memset(asmStubLocation, 0x90, sizeof(uint8_t) * 128);
+				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+				memset(asmStubLocation, 0x90, allocationSize);
 				void* functionAddress = locationsIntactBig.get(i).get<void*>(0); // locationsIntact.get(i)
 				//void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
 				uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
@@ -1969,21 +2103,24 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 				jmpInstructionBuffer[8] = 0x90;
 				jmpInstructionBuffer[9] = 0x90;
 
-
 				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
 				memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
 				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
 				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+				intactBigChecksumHook intactBigChecksum;
+				intactBigChecksum.functionAddress = (uint64_t*)functionAddress;
+				memcpy(intactBigChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * (7+3));
+				intactBigchecksumHooks.push_back(intactBigChecksum);
 				
 				}
 
-				#if 1
 				// splitCount
 				for (int i=0; i < splitCount; i++)
 				{
 
-				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), sizeof(uint8_t) * 128);
-				memset(asmStubLocation, 0x90, sizeof(uint8_t) * 128);
+				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+				memset(asmStubLocation, 0x90, allocationSize);
 				void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
 				//void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
 				uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
@@ -2155,23 +2292,28 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
 				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
 
-				int zzz = 0;
+				splitChecksumHook splitChecksum;
+				splitChecksum.functionAddress = (uint64_t*)functionAddress;
+				memcpy(splitChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * 8);
+				splitchecksumHooks.push_back(splitChecksum);
+
 				}
-				#endif
+
 			}
 
-			//SuspendAllThreads();
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
 		}
 		else if (info->ContextRecord->Dr6 & 0x8)
 		{
 			printf("bp4: %llx %llx\n", exceptionAddr, idaExceptionAddr);
+			fprintf(logFile, "bp4: %llx %llx\n", exceptionAddr, idaExceptionAddr);
+			fflush(logFile);
 	
 			//if (info->ContextRecord->Rcx == 0)			
 			//{
-				SuspendAllThreads();
-				__debugbreak();
+				//SuspendAllThreads();
+				//__debugbreak();
 			//}
 			
 			info->ContextRecord->EFlags |= ResumeFlag;
@@ -2503,8 +2645,45 @@ int main()
 	placeHardwareBP(bpAddr1, 2, Condition::ReadWrite);
 
 	// general debugging bp
-	//char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF6421a0ddd - StartOfBinary);
+	// list of weird checksum r9 cpu register access violation crashes
+	// 7FF64173A97A
+	// 7FF641961AEF
+
+	// apply two hwbp on two different places, see if anything changes pattern wise
+	// check out the other locations too if they are getting called
+	// dont forget to compare the hwbp with the readwrite one and see which one gets called first/last
+	// none of these locations gurantee that it will run after the checksum crash, but its our only bet
+
+	// if we dont find something new we would need to try the other locations and see if that brings us something
+	// else try the timer hook, this might end up not working since they can use rdtsc if they something time related for random switch cases
+	// to circumvent rdtsc you could either patch them after the checksum patches, which could end up being unstable
+	// use a kernel driver to set tsd flag in cr4, which makes rdtsc a privileged instruction, catch it and then return your own counter in eax.
+	// https://docs.hyperdbg.org/commands/extension-commands/tsc#debugger
+
+	// another option would be to automate running the game, put hwbp on a checksum and let it run until its in game 
+	// or crashes, save the callstack of the hwbp and do that 20 times per checksum location
+	// this would on average probably take a whole 2 weeks or maybe even more? but you would atleast catch every 
+	// single checksum in the game or atleast the ones that our own checksums are being tested against
+	// which would provide new evidence on new checksums to then patch out
+
+	// we should probably create a stack dumper first tho before we do any of this 
+	// to be 100% we arent messing something up ourselves lol
+
+	// 0x7FF6424D9F59
+	// 0x7FF6414C543E
+	// 0x7FF64169C028
+
+	// xor 03 51 04 33 C2 F7 D8
+
+	//char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF6414C543E - StartOfBinary);
 	//placeHardwareBP(bpAddr2, 3, Condition::Execute);
+
+
+	// arxan self healing at 0x1A6E97B5 + BlackOpsColdWar.exe
+	//char* bpAddr3 = reinterpret_cast<char*>(baseAddr + 0x7FF6424D9F52 - StartOfBinary);
+	//placeHardwareBP(bpAddr3, 3, Condition::Execute);
+	//char* bpAddr33 = reinterpret_cast<char*>(baseAddr + 0x7FF6413597B5 - StartOfBinary);
+	//placeHardwareBP(bpAddr33, 1, Condition::ReadWrite);
 
 	CbufAddText = reinterpret_cast<CbufAddText_t>(baseAddr + 0x821b8e0 + 0x1000);
 	LobbyBaseSetNetworkmode = reinterpret_cast<LobbyBaseSetNetworkmode_t>(baseAddr + 0x9508b10 + 0x1000);

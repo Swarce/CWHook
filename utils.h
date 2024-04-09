@@ -84,6 +84,25 @@ const WCHAR* BadWindowClassList[] =
 	L"tgrzoom"
 };
 
+// temporary fix until we nop out all the arxan "self healing" spots in the executable
+struct intactChecksumHook
+{
+	uint64_t* functionAddress;
+	uint8_t buffer[7];
+};
+
+struct intactBigChecksumHook
+{
+	uint64_t* functionAddress;
+	uint8_t buffer[7+3];
+};
+
+struct splitChecksumHook
+{
+	uint64_t* functionAddress;
+	uint8_t buffer[8];
+};
+
 bool RtlUnicodeStringContains(PUNICODE_STRING Str, PUNICODE_STRING SubStr, BOOLEAN CaseInsensitive)
 {
 	if (Str == nullptr || SubStr == nullptr || Str->Length < SubStr->Length)
