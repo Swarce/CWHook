@@ -5,6 +5,7 @@
 #include <phnt.h>
 #include <ntexapi.h>
 #include <ntpsapi.h>
+#include <minidumpapiset.h>
 
 #include <TlHelp32.h>
 #include <mmeapi.h>
@@ -2181,6 +2182,37 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 		// PageGuardMemory(breakpointAddress, 1);
 
 		return EXCEPTION_CONTINUE_EXECUTION;
+	}
+
+	if (info->ExceptionRecord->ExceptionCode == 0xc0000005)
+	{
+		static int access_violation_counter = 0;
+		access_violation_counter++;
+
+		if (access_violation_counter == 2)
+		{
+			printf("something exploded: %llx\n", info->ExceptionRecord->ExceptionCode);
+			fprintf(logFile, "something exploded: %llx\n", info->ExceptionRecord->ExceptionCode);
+			fflush(logFile);
+
+			HANDLE hFile = CreateFile("dump.dmp", GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+			MINIDUMP_EXCEPTION_INFORMATION minidump_exception_info = {GetCurrentThreadId(), info, FALSE};
+
+			constexpr auto type = MiniDumpIgnoreInaccessibleMemory //
+				| MiniDumpWithHandleData //
+				| MiniDumpScanMemory //
+				| MiniDumpWithProcessThreadData //
+				| MiniDumpWithFullMemoryInfo //
+				| MiniDumpWithThreadInfo //
+				| MiniDumpWithUnloadedModules;
+
+			MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, (MINIDUMP_TYPE)type, &minidump_exception_info, nullptr, nullptr);
+			CloseHandle(hFile);
+
+			SuspendAllThreads();
+			__debugbreak();
+		}
 	}
 
 	return EXCEPTION_CONTINUE_SEARCH;
