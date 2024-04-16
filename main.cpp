@@ -2478,6 +2478,15 @@ int main()
 			std::filesystem::remove(filePath);
 	}
 
+	// remove crashdumps
+	const char crashPath[] = "C://Users//user//AppData//Local//CrashDumps";
+
+	for (const auto& entry : std::filesystem::directory_iterator(crashPath))
+	{
+		auto filePath = entry.path();
+		std::filesystem::remove(filePath);
+	}
+
 	mainThreadId = GetCurrentThreadId();
 	return 0;
 }
