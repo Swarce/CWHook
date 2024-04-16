@@ -1246,8 +1246,40 @@ std::vector<uint32_t> calculatedChecksumLocations = {
 
 std::vector<uint32_t> runtimeChecksumLocations = {};
 
+// we can do another inline hook and provide the game with an area of memory to write to
+// just have to modify the stack to point to our memory location, should be enough
+void nopChecksumFixingMemcpy()
+{
+	return;
+
+	printf("crash incoming?\n");
+	//hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "89 02 8B 45 20 83 C0 FC 89 45 20 48 8B 45 10 48 83 C0 04 48 89 45 10 48 8B 45");
+	//size_t checksumFixersCount = checksumFixers.size();
+	//printf("checksumFixersCount %d\n", checksumFixersCount);
+
+	//void* functionAddress = checksumFixers.get(i).get<void*>(0);
+	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
+	char* functionAddress = reinterpret_cast<char*>(baseAddr + 0x7FF640705EAD - StartOfBinary);
+	printf("addr %llx\n", functionAddress);
+
+	DWORD old_protect{};
+	VirtualProtect(functionAddress, sizeof(uint8_t) * 2, PAGE_EXECUTE_READWRITE, &old_protect);
+	memset(functionAddress, 0x90, sizeof(uint8_t) * 2);
+	VirtualProtect(functionAddress, sizeof(uint8_t) * 2, old_protect, &old_protect);
+	FlushInstructionCache(GetCurrentProcess(), functionAddress, sizeof(uint8_t) * 2);
+
+	//SuspendAllThreads();
+}
+
 int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
 {
+	// get size of image from codcw
+	uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+	IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+	IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+	auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+	uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
+
 	// fix checksums here, else thread true memcpy attempt
 	// seems like its working but eventually dies because arxan at some fixes the checksums and checksums in general dont get called so much
 	// it does make the game run almost every time now
