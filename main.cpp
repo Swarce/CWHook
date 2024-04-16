@@ -1288,6 +1288,15 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		{
 			DWORD old_protect{};
 
+			if (memcmp(intactchecksumHooks[i].functionAddress, intactchecksumHooks[i].buffer, sizeof(uint8_t) * 7))
+			{
+				uint64_t idaAddress = (uint64_t)intactchecksumHooks[i].functionAddress - baseAddressStart + StartOfBinary;
+
+				printf("%llx got changed\n", idaAddress);
+				fprintf(logFile, "%llx got changed\n", idaAddress);
+				fflush(logFile);
+			}
+
 			VirtualProtect(intactchecksumHooks[i].functionAddress, sizeof(uint8_t) * 7, PAGE_EXECUTE_READWRITE, &old_protect);
 			memcpy(intactchecksumHooks[i].functionAddress, intactchecksumHooks[i].buffer, sizeof(uint8_t) * 7);
 			VirtualProtect(intactchecksumHooks[i].functionAddress, sizeof(uint8_t) * 7, old_protect, &old_protect);
@@ -1297,6 +1306,15 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		for (int i=0; i < intactBigchecksumHooks.size(); i++)
 		{
 			DWORD old_protect{};
+
+			if (memcmp(intactBigchecksumHooks[i].functionAddress, intactBigchecksumHooks[i].buffer, sizeof(uint8_t) * 7))
+			{
+				uint64_t idaAddress = (uint64_t)intactBigchecksumHooks[i].functionAddress - baseAddressStart + StartOfBinary;
+
+				printf("%llx got changed\n", idaAddress);
+				fprintf(logFile, "%llx got changed\n", idaAddress);
+				fflush(logFile);
+			}
 			
 			VirtualProtect(intactBigchecksumHooks[i].functionAddress, sizeof(uint8_t) * 10, PAGE_EXECUTE_READWRITE, &old_protect);
 			memcpy(intactBigchecksumHooks[i].functionAddress, intactBigchecksumHooks[i].buffer, sizeof(uint8_t) * 10);
@@ -1307,6 +1325,15 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		for (int i=0; i < splitchecksumHooks.size(); i++)
 		{
 			DWORD old_protect{};
+
+			if (memcmp(splitchecksumHooks[i].functionAddress, splitchecksumHooks[i].buffer, sizeof(uint8_t) * 7))
+			{
+				uint64_t idaAddress = (uint64_t)splitchecksumHooks[i].functionAddress - baseAddressStart + StartOfBinary;
+
+				printf("%llx got changed\n", idaAddress);
+				fprintf(logFile, "%llx got changed\n", idaAddress);
+				fflush(logFile);
+			}
 			
 			VirtualProtect(splitchecksumHooks[i].functionAddress, sizeof(uint8_t) * 8, PAGE_EXECUTE_READWRITE, &old_protect);
 			memcpy(splitchecksumHooks[i].functionAddress, splitchecksumHooks[i].buffer, sizeof(uint8_t) * 8);
