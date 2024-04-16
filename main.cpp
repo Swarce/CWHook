@@ -1652,8 +1652,17 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			static int counter = 0;
 			counter++;
 
-			if (counter == 3)
+			if (counter == 5)
 			{
+				// get size of image from codcw
+				uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+				IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+				IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+				auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+				uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
+
+				nopChecksumFixingMemcpy();
+
 				hook::pattern locationsIntact = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 45 ? FF");
 				hook::pattern locationsIntactBig = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 85");
 				hook::pattern locationsSplit = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A E9");
@@ -2101,16 +2110,26 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 		}
 		else if (info->ContextRecord->Dr6 & 0x8)
 		{
-			printf("bp4: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-			fprintf(logFile, "bp4: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-			fflush(logFile);
-	
-			//if (info->ContextRecord->Rcx == 0)			
-			//{
-				//SuspendAllThreads();
-				//__debugbreak();
-			//}
-			
+			// get size of image from codcw
+			uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+			IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+			IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+			auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+			uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
+
+			if (exceptionAddr >= baseAddressStart && exceptionAddr <= baseAddressEnd)
+			{
+				static int counter = 0;
+				counter++;
+
+				//if (counter == 168207)
+				//	SuspendAllThreads();
+
+				printf("bp4: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+				fprintf(logFile, "bp4: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+				fflush(logFile);
+			}
+
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
 		}
