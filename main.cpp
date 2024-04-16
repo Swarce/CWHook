@@ -1345,93 +1345,15 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	static int fixChecksumCalls = 0;
 	fixChecksumCalls++;
 
-	uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
-	
-	// get size of image from codcw
-	IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
-	IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
-	auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
-	uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
-
 	//printf("rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg);
-	printf("rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x, fixChecksumCalls %d\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg, fixChecksumCalls);
-	fprintf(logFile, "rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x, fixChecksumCalls %d\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg, fixChecksumCalls);
-	fflush(logFile);
+	//printf("rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x, fixChecksumCalls %d\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg, fixChecksumCalls);
+	//fprintf(logFile, "rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x, fixChecksumCalls %d\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg, fixChecksumCalls);
+	//fflush(logFile);
 
 	uint32_t calculatedChecksum = calculatedChecksumFromArg;
 	uint32_t reversedChecksum = reverse_bytes(calculatedChecksumFromArg);
 	uint32_t* calculatedChecksumPtr = (uint32_t*)((char*)ptrStack+0x120); // 0x120 is a good starting point to decrement downwards to find the calculated checksum on the stack
 	uint32_t* calculatedReversedChecksumPtr = (uint32_t*)((char*)ptrStack+0x120); // 0x120 is a good starting point to decrement downwards to find the calculated checksum on the stack
-
-	// TODO: maybe norrow it down to only a few ones and then do some investigations on them?
-	/*
-	if (calculatedChecksum == 0xbd1e3d27 && fixChecksumCalls == 9)
-	{
-		//SuspendAllThreads();
-		//__debugbreak();
-		printf("check?????????????\n");
-		fprintf(logFile, "check?????????????\n");
-		fflush(logFile);
-	}
-
-	if (calculatedChecksum == 0xb44aed1 && fixChecksumCalls == 9)
-	{
-		//SuspendAllThreads();
-		//__debugbreak();
-		printf("check?????????????\n");
-		fprintf(logFile, "check?????????????\n");
-		fflush(logFile);
-	}
-	*/
-
-/*
-	static bool allChecksumsAreTheSame = false;
-	if (fixChecksumCalls <= 9)
-	{
-		bool checksumsAreTheSame = true;
-		runtimeChecksumLocations.push_back(calculatedChecksum);
-		for (int i=0; i < runtimeChecksumLocations.size(); i++)
-		{
-			if (runtimeChecksumLocations[i] != calculatedChecksumLocations[i])
-				checksumsAreTheSame = false;
-		}
-
-		if (checksumsAreTheSame && runtimeChecksumLocations.size() == 9)
-		{
-			printf("check?????????????\n");
-			fprintf(logFile, "check?????????????\n");
-			fflush(logFile);
-			allChecksumsAreTheSame = true;
-			
-			//SuspendAllThreads();
-			//__debugbreak();
-		}
-	}
-
-	if (fixChecksumCalls >= 9 && allChecksumsAreTheSame)
-	{
-		printf("works\n");
-		getchar();
-	}
-
-*/
-
-	// TODO: implement a stack dumper that dumps 0x300 up and down from rbp
-	// should also dereference .text pointers and dump that memory too like a small chunk, 0x30 ish?
-	// compare our working/crashing checksum dumps with the stack this time
-	// if nothing is different then we are clearly getting screwed over by not finding every checksum
-
-	// try hooking gettickcount64, gettickcount, QueryPerformanceCounter to always return the same starting value.
-	// maybe we can force the same checksum routines to always run then?
-
-	// if checksum is the reason we would need to create a automated program with python that launches the game for us
-	// we basically put a hwbp on each checksum, wait for the game to crash or run and then close it, 
-	// we save the std vector on every element to a file, we can put that file into a folder where each folde represents each checksum
-	// this obviously is gonna take a really long time but that would be one way of finding every possible checksum check
-/*
-	SuspendAllThreads();
-	__debugbreak();
-*/
 
 	bool doubleTextChecksum = false;
 	uint64_t* previousResultPtr = nullptr;
@@ -1449,9 +1371,9 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 				uint64_t derefResult = **(uint64_t**)textPtr;
 				pointerCounter++;
 
-				printf("result: %llx\n", derefResult);
-				fprintf(logFile, "result: %llx\n", derefResult);
-				fflush(logFile);
+				//printf("result: %llx\n", derefResult);
+				//fprintf(logFile, "result: %llx\n", derefResult);
+				//fflush(logFile);
 
 				// store the ptr above 0xffffffffffffffff and then use it in our originalchecksum check
 				if (derefResult == 0xffffffffffffffff)
@@ -1463,9 +1385,9 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 
 						doubleTextChecksum = true;
 
-						printf("found double pointer text section\n", derefResult);
-						fprintf(logFile, "found double pointer text section\n", derefResult);
-						fflush(logFile);
+						//printf("found double pointer text section\n", derefResult);
+						//fprintf(logFile, "found double pointer text section\n", derefResult);
+						//fflush(logFile);
 
 						// because textptr will be pointing at 0xffffffffffffffff, increment it once 
 						// so we are pointing to the correct checksum location
@@ -1496,9 +1418,9 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 			{
 				uint64_t derefResult = **(uint64_t**)textPtr;
 
-				printf("result: %llx\n", derefResult);
-				fprintf(logFile, "result: %llx\n", derefResult);
-				fflush(logFile);
+				//printf("result: %llx\n", derefResult);
+				//fprintf(logFile, "result: %llx\n", derefResult);
+				//fflush(logFile);
 			}
 
 			textPtr--;
@@ -1513,8 +1435,8 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		if (derefPtr == calculatedChecksum)
 		{
 			//printf("found calculatedChecksum on stack %llx\n", calculatedChecksumPtr);
-			fprintf(logFile, "found calculatedChecksum on stack %llx\n", calculatedChecksumPtr);
-			fflush(logFile);
+			//fprintf(logFile, "found calculatedChecksum on stack %llx\n", calculatedChecksumPtr);
+			//fflush(logFile);
 			break;
 		}
 
@@ -1529,8 +1451,8 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		if (derefPtr == reversedChecksum)
 		{
 			//printf("found reversedChecksum on stack %llx\n", calculatedChecksumPtr);
-			fprintf(logFile, "found reversedChecksum on stack %llx\n", calculatedReversedChecksumPtr);
-			fflush(logFile);
+			//fprintf(logFile, "found reversedChecksum on stack %llx\n", calculatedReversedChecksumPtr);
+			//fflush(logFile);
 			break;
 		}
 
@@ -1549,8 +1471,8 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		if (derefPtr >= baseAddressStart && derefPtr <= baseAddressEnd)
 		{
 			//printf("found potential checksum location: %llx\n", derefPtr);
-			fprintf(logFile, "found potential checksum location: %llx\n", derefPtr);
-			fflush(logFile);
+			//fprintf(logFile, "found potential checksum location: %llx\n", derefPtr);
+			//fflush(logFile);
 
 			if (ptrOffset == 0 && rbpOffset < 0x90)
 			{
@@ -1600,8 +1522,8 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	// TODO: if that still doesnt work we would need to allocate our own stack and based on the current thread id give access to that specific stack
 	// we 100% should refactor our assembly stub generation tho because its getting really annoying to do changes
 
-	fprintf(logFile, "originalChecksum: %llx\n\n", originalChecksum);
-	fflush(logFile);
+	//fprintf(logFile, "originalChecksum: %llx\n\n", originalChecksum);
+	//fflush(logFile);
 	return originalChecksum;
 }
 
@@ -1705,208 +1627,22 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 		}
 		else if (info->ContextRecord->Dr6 & 0x2)
 		{
-			static int counterAfterBP = 0;
-			static int counter = 0;
-			static bool capture = false;
-			counter++;
+			// get size of image from codcw
+			uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+			IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+			IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+			auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+			uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
 
-#define addressPrinter 0
-#define tlsJMPchecksumPrintAddress 0
-#define tlsCallbackFunctionChecksum 0
-#define tlsCallbackJmpChecksum 0
-
-			printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-			fprintf(logFile, "bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-			fflush(logFile);
-
-			Sleep(5000);
-
-			//if (counter == 59)
-			//{
-			//	SuspendAllThreads();
-			//}
-
-#if tlsJMPchecksumPrintAddress
-			if (counter == 1)
+			if (exceptionAddr >= baseAddressStart && exceptionAddr <= baseAddressEnd)
 			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF6415650E2 - StartOfBinary);
+				static int counter = 0;
+				counter++;
 
-				//counterAfterBP = counter + 1;
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
+				printf("bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+				fprintf(logFile, "bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+				fflush(logFile);
 			}
-
-			if (counter == 2)
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7ff642184f0c - StartOfBinary);
-
-				//counterAfterBP = counter + 1;
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-			}
-
-			if (counter == 3)
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7ff640a4756b - StartOfBinary);
-
-				//counterAfterBP = counter + 1;
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-			}
-
-			if (counter == 3)
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7ff6402f3ef9 - StartOfBinary);
-
-				counterAfterBP = counter + 1;
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-			}
-#endif
-
-#if tlsCallbackFunctionChecksum
-			if (counter == 4)
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-
-				// mess up the area where it tries to calculate the checksum
-				char* ptr = reinterpret_cast<char*>(baseAddr + 0x7FF6402333F9 - StartOfBinary);
-				for (int i = 0; i < 2; i++)
-				{
-					uint64_t* assemblyInstructions = (uint64_t*)ptr++;
-					*assemblyInstructions = 0x0000000000000000;
-				}
-				info->ContextRecord->Rax = 0x0000000000e74b53;
-
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF6418D5406 - StartOfBinary);
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-			}
-
-			if (counter == 6) // 6 because writing 0's at the checksum address triggers another bp from our own module
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-
-				uint32_t originalChecksum = **(uint32_t**)(info->ContextRecord->Rbp + 0x48);
-				*(uint32_t*)(info->ContextRecord->Rbp + 0x60) = originalChecksum;
-			}
-#endif
-
-#if tlsCallbackJmpChecksum
-			if (counter == 2)
-			{
-				char* ptr = reinterpret_cast<char*>(baseAddr + 0x7FF627267390 - StartOfBinary);
-
-				for (int i = 0; i < 2; i++)
-				{
-					uint64_t* assemblyInstructions = (uint64_t*)ptr++;
-					*assemblyInstructions = 0x0000000000000000;
-				}
-				info->ContextRecord->Rax = 0x0000000000000000;
-
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF642271595 - StartOfBinary);
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-			}
-
-			if (counter == 3)
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-				char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF6420E8CFD - StartOfBinary);
-
-				info->ContextRecord->Dr1 = (DWORD64)bpAddr1;
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::Execute);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-			}
-
-			if (counter == 4)
-			{
-				printf("bp2: %llx %llx\n", exceptionAddr, idaExceptionAddr);
-
-				uint32_t originalChecksum = **(uint32_t**)(info->ContextRecord->Rbp + 0x48);
-				*(uint32_t*)(info->ContextRecord->Rbp + 0x60) = originalChecksum;
-			}
-#endif
-
-#if addressPrinter
-			if (counterAfterBP == counter && counterAfterBP != 0)
-			{
-				info->ContextRecord->Dr1 = info->ContextRecord->Rbp + 0x68; // 0x60, 0x68
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 2, 1, 1);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 20, 2, Condition::ReadWrite);
-				SetBits((unsigned long&)info->ContextRecord->Dr7, 22, 2, 8);
-
-				capture = true;
-				printf("we are capturing\n");
-			}
-
-			if (capture)
-			{
-				struct addresses {
-					uint64_t addr;
-					int count;
-				};
-
-				static std::vector<addresses> AddressesThatReadFromRbp;
-				bool addressExist = false;
-
-				for (int i = 0; i < AddressesThatReadFromRbp.size(); i++)
-				{
-					if (AddressesThatReadFromRbp[i].addr == idaExceptionAddr)
-					{
-						addressExist = true;
-						AddressesThatReadFromRbp[i].count++;
-					}
-				}
-
-				if (!addressExist)
-					AddressesThatReadFromRbp.push_back({ idaExceptionAddr, 1 });
-
-				//if (counter == 100000)
-				if (AddressesThatReadFromRbp.size() == 12)
-				{
-					for (int i = 0; i < AddressesThatReadFromRbp.size(); i++)
-						printf("%llx %d\n", AddressesThatReadFromRbp[i].addr, AddressesThatReadFromRbp[i].count);
-
-					HWND hCurWnd = ::GetForegroundWindow();
-					DWORD dwMyID = ::GetCurrentThreadId();
-					DWORD dwCurID = ::GetWindowThreadProcessId(hCurWnd, NULL);
-					::AttachThreadInput(dwCurID, dwMyID, TRUE);
-					::SetWindowPos(GetConsoleWindow(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
-					::SetWindowPos(GetConsoleWindow(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
-					::SetForegroundWindow(GetConsoleWindow());
-					::SetFocus(GetConsoleWindow());
-					::SetActiveWindow(GetConsoleWindow());
-					::AttachThreadInput(dwCurID, dwMyID, FALSE);
-
-					SuspendAllThreads();
-				}
-			}
-#endif
 
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
@@ -2700,49 +2436,20 @@ int main()
 	//placeHardwareBP(bpAddr1, 1, Condition::ReadWrite);
 
 	// checksum fixing bp
-	char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF64254467C - StartOfBinary);
-	placeHardwareBP(bpAddr1, 2, Condition::ReadWrite);
+	//char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF64254467C - StartOfBinary);
+	//placeHardwareBP(bpAddr2, 2, Condition::ReadWrite);
+	char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF641E3CD6E - StartOfBinary);
+	placeHardwareBP(bpAddr2, 2, Condition::Execute);
 
-	// general debugging bp
-	// list of weird checksum r9 cpu register access violation crashes
-	// 7FF64173A97A
-	// 7FF641961AEF
+	// TODO: try doing our inline hooks after it checked our last checksum comparison location
 
-	// apply two hwbp on two different places, see if anything changes pattern wise
-	// check out the other locations too if they are getting called
-	// dont forget to compare the hwbp with the readwrite one and see which one gets called first/last
-	// none of these locations gurantee that it will run after the checksum crash, but its our only bet
+	// arxan self healing changes back this hook
+	//char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF6413597B5 - StartOfBinary);
+	//char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF640324847 - StartOfBinary);
+	//placeHardwareBP(bpAddr1, 3, Condition::Execute);
 
-	// if we dont find something new we would need to try the other locations and see if that brings us something
-	// else try the timer hook, this might end up not working since they can use rdtsc if they something time related for random switch cases
-	// to circumvent rdtsc you could either patch them after the checksum patches, which could end up being unstable
-	// use a kernel driver to set tsd flag in cr4, which makes rdtsc a privileged instruction, catch it and then return your own counter in eax.
-	// https://docs.hyperdbg.org/commands/extension-commands/tsc#debugger
-
-	// another option would be to automate running the game, put hwbp on a checksum and let it run until its in game 
-	// or crashes, save the callstack of the hwbp and do that 20 times per checksum location
-	// this would on average probably take a whole 2 weeks or maybe even more? but you would atleast catch every 
-	// single checksum in the game or atleast the ones that our own checksums are being tested against
-	// which would provide new evidence on new checksums to then patch out
-
-	// we should probably create a stack dumper first tho before we do any of this 
-	// to be 100% we arent messing something up ourselves lol
-
-	// 0x7FF6424D9F59
-	// 0x7FF6414C543E
-	// 0x7FF64169C028
-
-	// xor 03 51 04 33 C2 F7 D8
-
-	//char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF6414C543E - StartOfBinary);
-	//placeHardwareBP(bpAddr2, 3, Condition::Execute);
-
-
-	// arxan self healing at 0x1A6E97B5 + BlackOpsColdWar.exe
-	//char* bpAddr3 = reinterpret_cast<char*>(baseAddr + 0x7FF6424D9F52 - StartOfBinary);
-	//placeHardwareBP(bpAddr3, 3, Condition::Execute);
-	//char* bpAddr33 = reinterpret_cast<char*>(baseAddr + 0x7FF6413597B5 - StartOfBinary);
-	//placeHardwareBP(bpAddr33, 1, Condition::ReadWrite);
+	//char* bpAddr4 = reinterpret_cast<char*>(baseAddr + 0x7FF641E3CD6E - StartOfBinary);
+	//placeHardwareBP(bpAddr4, 1, Condition::Execute);
 
 	CbufAddText = reinterpret_cast<CbufAddText_t>(baseAddr + 0x821b8e0 + 0x1000);
 	LobbyBaseSetNetworkmode = reinterpret_cast<LobbyBaseSetNetworkmode_t>(baseAddr + 0x9508b10 + 0x1000);
