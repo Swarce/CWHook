@@ -1232,43 +1232,18 @@ uint32_t reverse_bytes(uint32_t bytes)
     return aux;
 }
 
-std::vector<uint32_t> calculatedChecksumLocations = {
-	0xb68dfec7,
-	0x2d3ef41b,
-	0x70081cc,
-	0x9c446f9c,
-	0xb20c819e,
-	0x3ba90c3e,
-	0xf39e4805,
-	0xeea2a516,
-	0xbd1e3d27,
-};
-
-std::vector<uint32_t> runtimeChecksumLocations = {};
-
-// we can do another inline hook and provide the game with an area of memory to write to
-// just have to modify the stack to point to our memory location, should be enough
+// TODO: create an inline stub cause just noping the instruction out doesnt work
 void nopChecksumFixingMemcpy()
 {
 	return;
 
-	printf("crash incoming?\n");
-	//hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "89 02 8B 45 20 83 C0 FC 89 45 20 48 8B 45 10 48 83 C0 04 48 89 45 10 48 8B 45");
-	//size_t checksumFixersCount = checksumFixers.size();
-	//printf("checksumFixersCount %d\n", checksumFixersCount);
-
-	//void* functionAddress = checksumFixers.get(i).get<void*>(0);
-	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
-	char* functionAddress = reinterpret_cast<char*>(baseAddr + 0x7FF640705EAD - StartOfBinary);
-	printf("addr %llx\n", functionAddress);
-
-	DWORD old_protect{};
-	VirtualProtect(functionAddress, sizeof(uint8_t) * 2, PAGE_EXECUTE_READWRITE, &old_protect);
-	memset(functionAddress, 0x90, sizeof(uint8_t) * 2);
-	VirtualProtect(functionAddress, sizeof(uint8_t) * 2, old_protect, &old_protect);
-	FlushInstructionCache(GetCurrentProcess(), functionAddress, sizeof(uint8_t) * 2);
-
-	//SuspendAllThreads();
+	hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "89 02 8B 45 20 83 C0 FC E9");
+	size_t checksumFixersCount = checksumFixers.size();
+	
+	for (int i=0; i < checksumFixersCount; i++)
+	{
+		void* functionAddress = checksumFixers.get(i).get<void*>(0);
+	}
 }
 
 int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
@@ -1527,6 +1502,452 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	return originalChecksum;
 }
 
+void createInlineAsmStub()
+{
+	// get size of image from codcw
+	uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+	IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+	IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+	auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+	uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
+
+	hook::pattern locationsIntact = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 45 ? FF");
+	hook::pattern locationsIntactBig = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 85");
+	hook::pattern locationsSplit = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A E9");
+	size_t intactCount = locationsIntact.size();
+	size_t intactBigCount = locationsIntactBig.size();
+	size_t splitCount = locationsSplit.size();
+	const size_t allocationSize = sizeof(uint8_t) * 128;
+
+	printf("p %d\n", intactCount);
+	printf("p %d\n", intactBigCount);
+	printf("p %d\n", splitCount);
+
+	// TODO: refactor this later so we for loop through all the address locations
+	// and only do things based on the differences between every checksum type
+
+	// intact
+	for (int i=0; i < intactCount; i++)
+	{
+
+		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		memset(asmStubLocation, 0x90, allocationSize);
+		void* functionAddress = locationsIntact.get(i).get<void*>(0); // locationsIntact.get(i)
+		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+
+		// backup instructions that will get destroyed
+		const int length = sizeof(uint8_t) * 8;
+		uint8_t instructionBuffer[8] = {};
+		memcpy(instructionBuffer, functionAddress, length);
+
+		uint32_t instructionBufferJmpDistance = 0;
+		if (instructionBuffer[3] == 0xE9)
+			memcpy(&instructionBufferJmpDistance, (char*)functionAddress+0x4, 4); // 0x4 so we skip 0xE9
+
+		// create assembly stub content
+		static asmjit::JitRuntime runtime;
+		asmjit::CodeHolder code;
+		code.init(runtime.environment());
+		asmjit::x86::Assembler a(&code);
+
+		uint64_t rbpOffset = instructionBuffer[5];
+		
+		/*
+		asmjit::Label L1 = a.newLabel();
+		a.bind(L1);
+		a.jmp(L1);
+		*/
+
+		a.sub(asmjit::x86::rsp, 0x400); // 0x40? 0x32 before
+		pushad64();
+
+		//a.mov(asmjit::x86::rax, (uint64_t)(void*)SuspendAllThreads);
+		//a.call(asmjit::x86::rax);
+
+		// TODO: Find out a way to create our own allocated stack and modify rsp and rbp to use it
+		// once we come out of the function we restore rsp and rbp back to normal
+
+		a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x20), asmjit::x86::rax);
+		a.mov(asmjit::x86::rdx, asmjit::x86::rcx);	// offset within text section pointer (ecx*4)
+		a.mov(asmjit::x86::rcx, rbpOffset);
+
+		a.mov(asmjit::x86::r8, asmjit::x86::rbp);
+		a.mov(asmjit::x86::r9, instructionBufferJmpDistance);	// incase we mess up a split checksum
+		a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
+		a.call(asmjit::x86::rax);
+		a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
+										// TODO: remove these changes including the utils.h whenever we figure out why we are crashing from checksum failures
+
+		//popad64();
+		popad64WithoutRAX();
+		a.add(asmjit::x86::rsp, 0x400);
+
+		a.mov(ptr(asmjit::x86::rdx, asmjit::x86::rcx, 2), asmjit::x86::eax); // mov [rdx+rcx*4], eax
+
+		if (instructionBufferJmpDistance == 0)
+		{
+			a.add(dword_ptr(asmjit::x86::rbp, rbpOffset), -1); // add dword ptr [rbp+rbpOffset], 0FFFFFFFFh
+		}
+		else
+		{
+			// printf("instructionBufferJmpDistance: %x\n", instructionBufferJmpDistance);
+			// https://forum.osdev.org/viewtopic.php?p=168467#p168467
+			// push the desired address on to the stack and then perform a 64 bit RET
+
+			// jmp loc_7FF641C707A5
+			a.add(asmjit::x86::rsp, 0x8); // pop return address off the stack cause we will jump
+			uint64_t addressToJump = (uint64_t)functionAddress + instructionBufferJmpDistance;
+			a.mov(asmjit::x86::r11, addressToJump);	// r11 is being used but should be fine based on documentation
+			a.push(asmjit::x86::r11);
+		}
+
+		a.add(asmjit::x86::rsp, 0x8); // since we dont pop off rax we need to sub 0x8 the rsp
+		a.ret();
+
+		void* asmjitResult = nullptr;
+		runtime.add(&asmjitResult, &code);
+		
+		// copy over the content to the stub
+		uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+		memcpy(tempBuffer, asmjitResult, code.codeSize());
+		memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+		const int callInstructionBytes = 7;
+		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+		DWORD old_protect{};
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memset(functionAddress, 0, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		uint8_t jmpInstructionBuffer[callInstructionBytes] = {};
+		jmpInstructionBuffer[0] = 0xE8;
+		jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+		jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+		jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+		jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+		jmpInstructionBuffer[5] = 0x90;
+		jmpInstructionBuffer[6] = 0x90;
+
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		// temporary way to test if this would get us into the game all the time
+		// we basically overwrite at a set small time the instructions from a different thread cause
+		// arxan is currently undoing our checksum fixes
+		intactChecksumHook intactChecksum;
+		intactChecksum.functionAddress = (uint64_t*)functionAddress;
+		memcpy(intactChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * 7);
+		intactchecksumHooks.push_back(intactChecksum);
+	}
+
+	// big intact
+	for (int i=0; i < intactBigCount; i++)
+	{
+
+		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		memset(asmStubLocation, 0x90, allocationSize);
+		void* functionAddress = locationsIntactBig.get(i).get<void*>(0); // locationsIntact.get(i)
+		//void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
+		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+
+		// backup instructions that will get destroyed
+		const int length = sizeof(uint8_t) * 8;
+		uint8_t instructionBuffer[8] = {};
+		memcpy(instructionBuffer, functionAddress, length);
+
+		uint32_t instructionBufferJmpDistance = 0;
+		if (instructionBuffer[3] == 0xE9)
+			memcpy(&instructionBufferJmpDistance, (char*)functionAddress+0x4, 4); // 0x4 so we skip 0xE9
+
+		// create assembly stub content
+		static asmjit::JitRuntime runtime;
+		asmjit::CodeHolder code;
+		code.init(runtime.environment());
+		asmjit::x86::Assembler a(&code);
+
+		uint64_t rbpOffset = instructionBuffer[5];
+
+		//pushad64();
+		//a.sub(asmjit::x86::rsp, 0x40); // 0x40? 0x32 before
+
+		a.sub(asmjit::x86::rsp, 0x400); // 0x40? 0x32 before
+		pushad64();
+
+		//a.mov(asmjit::x86::rax, (uint64_t)(void*)SuspendAllThreads);
+		//a.call(asmjit::x86::rax);
+
+		a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x20), asmjit::x86::rax);
+		a.mov(asmjit::x86::rdx, asmjit::x86::rcx);		// offset within text section pointer (ecx*4)
+		a.mov(asmjit::x86::rcx, 0x120); 				// we dont use rbpoffset since we only get 1 byte from the 2 byte offset (rbpOffset)
+														// 0x130 is a good starting ptr to decrement downwards so we can find the original checksum
+		
+		a.mov(asmjit::x86::r8, asmjit::x86::rbp);				// we need this so we know what stack the stub was at
+		a.mov(asmjit::x86::r9, instructionBufferJmpDistance);	// incase we mess up a split checksum
+		a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
+		a.call(asmjit::x86::rax);
+		a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
+
+		//a.add(asmjit::x86::rsp, 0x40);
+		//popad64();
+		popad64WithoutRAX();
+		a.add(asmjit::x86::rsp, 0x400);
+
+		a.mov(ptr(asmjit::x86::rdx, asmjit::x86::rcx, 2), asmjit::x86::eax); // mov [rdx+rcx*4], eax
+
+		if (instructionBufferJmpDistance == 0)
+		{
+			// TODO: big intact functions the way we are getting rbpOffset needs another byte for it to work
+			// do this for now kinda scuffed
+			rbpOffset += 0x100;
+			a.add(dword_ptr(asmjit::x86::rbp, rbpOffset), -1); // add dword ptr [rbp+rbpOffset], 0FFFFFFFFh
+		}
+		else
+		{
+			//printf("instructionBufferJmpDistance: %x\n", instructionBufferJmpDistance);
+			// https://forum.osdev.org/viewtopic.php?p=168467#p168467
+			// push the desired address on to the stack and then perform a 64 bit RET
+
+			// jmp loc_7FF641C707A5
+			a.add(asmjit::x86::rsp, 0x8); // pop return address off the stack cause we will jump
+			uint64_t addressToJump = (uint64_t)functionAddress + instructionBufferJmpDistance;
+			a.mov(asmjit::x86::r11, addressToJump);	// r11 is being used but should be fine based on documentation
+			a.push(asmjit::x86::r11);
+		}
+
+		a.add(asmjit::x86::rsp, 0x8); // since we dont pop off rax we need to sub 0x8 the rsp
+		a.ret();
+
+		void* asmjitResult = nullptr;
+		runtime.add(&asmjitResult, &code);
+		
+		// copy over the content to the stub
+		uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+		memcpy(tempBuffer, asmjitResult, code.codeSize());
+		memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+		const int callInstructionBytes = 7 + 3; // three more nops on big intact
+		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+		DWORD old_protect{};
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memset(functionAddress, 0, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		uint8_t jmpInstructionBuffer[callInstructionBytes] = {};
+		jmpInstructionBuffer[0] = 0xE8;
+		jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+		jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+		jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+		jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+		jmpInstructionBuffer[5] = 0x90;
+		jmpInstructionBuffer[6] = 0x90;
+		// TODO: on big intact checksums we fuck up the instructions with the call
+		// check if the same thing happens on regular intact checksums
+		jmpInstructionBuffer[7] = 0x90;
+		jmpInstructionBuffer[8] = 0x90;
+		jmpInstructionBuffer[9] = 0x90;
+
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		intactBigChecksumHook intactBigChecksum;
+		intactBigChecksum.functionAddress = (uint64_t*)functionAddress;
+		memcpy(intactBigChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * (7+3));
+		intactBigchecksumHooks.push_back(intactBigChecksum);
+	}
+
+	// splitCount
+	for (int i=0; i < splitCount; i++)
+	{
+		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		memset(asmStubLocation, 0x90, allocationSize);
+		void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
+		//void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
+		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+
+		// backup instructions that will get destroyed
+		const int length = sizeof(uint8_t) * 8;
+		uint8_t instructionBuffer[8] = {};
+		memcpy(instructionBuffer, functionAddress, length);
+
+		uint32_t instructionBufferJmpDistance = 0;
+		if (instructionBuffer[3] == 0xE9)
+			memcpy(&instructionBufferJmpDistance, (char*)functionAddress+0x4, 4); // 0x4 so we skip 0xE9
+
+		// TODO: fix negative instructionBufferJmpDistance when we are trying to get the rbpOffset
+		/*
+		static int huhCounter = 0;
+		huhCounter++;
+		if (huhCounter == 7)
+		{
+			SuspendAllThreads();
+			__debugbreak();
+		}
+		*/
+
+		bool jumpDistanceNegative = instructionBufferJmpDistance >> 31; // get sign bit from jump distance
+		//int32_t jumpDistance = 0;
+		int32_t jumpDistance = instructionBufferJmpDistance;
+
+		// convert the hex number to a negative int
+		//if (jumpDistanceNegative)
+		//	jumpDistance = instructionBufferJmpDistance | 0xff << 24;
+
+		// TODO: receive the rbpOffset by going through the jmp instruction
+		// on big rbp offsets we could do the same hack we did on big intact where we do rbpOffset+0x100 if its below 0x60
+		uint64_t rbpOffset = 0x0;
+		char* rbpOffsetPtr = nullptr;
+
+		// TODO: just use jumpDistance once we got a working test case
+		if (jumpDistanceNegative)
+			rbpOffsetPtr = (char*)((uint64_t)functionAddress+jumpDistance+0x8);
+		else
+			rbpOffsetPtr = (char*)((uint64_t)functionAddress+instructionBufferJmpDistance+0x8);
+
+		rbpOffsetPtr++;
+
+		// depending on the rbp offset from add dword ptr we need one more byte for the rbpOffset
+		if (*(unsigned char*)rbpOffsetPtr == 0x45) 		// add dword ptr [rbp+68],-01
+		{
+			rbpOffsetPtr++;
+			rbpOffset = *(char*)rbpOffsetPtr;
+		}
+		else if (*(unsigned char*)rbpOffsetPtr == 0x85)	// add dword ptr [rbp+1CC],-01
+		{
+			rbpOffsetPtr++;
+			rbpOffset = *(short*)rbpOffsetPtr;
+		}
+
+
+		// create assembly stub content
+		static asmjit::JitRuntime runtime;
+		asmjit::CodeHolder code;
+		code.init(runtime.environment());
+		asmjit::x86::Assembler a(&code);
+
+		// pushad64();
+		// a.sub(asmjit::x86::rsp, 0x40); // 0x40? 0x32 before
+
+		a.sub(asmjit::x86::rsp, 0x400); // 0x40? 0x32 before
+		pushad64();
+
+		/*
+		asmjit::Label L1 = a.newLabel();
+		a.bind(L1);
+		a.int3();
+		a.jmp(L1);
+		*/
+
+		a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x20), asmjit::x86::rax);
+		a.mov(asmjit::x86::rdx, asmjit::x86::rcx);	// offset within text section pointer (ecx*4)
+		a.mov(asmjit::x86::rcx, rbpOffset);
+
+		a.mov(asmjit::x86::r8, asmjit::x86::rbp);	// we need this so we know what stack the stub was at
+		
+		// TODO: check if this is still fucked, the value is actually 0xfedef2b2 not 0xffdef2b2
+		// since we swap out the last byte we mess up the jump distance
+		/*
+		if (jumpDistance == 0xffdef2b2)
+		{
+			SuspendAllThreads();
+			__debugbreak();
+		}
+		*/
+
+		if (jumpDistanceNegative)
+			a.mov(asmjit::x86::r9, jumpDistance);
+		else
+			a.mov(asmjit::x86::r9, instructionBufferJmpDistance);
+
+		a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
+		a.call(asmjit::x86::rax);
+		a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
+
+		//a.add(asmjit::x86::rsp, 0x40);
+		//popad64();
+
+		popad64WithoutRAX();
+		a.add(asmjit::x86::rsp, 0x400);
+
+		a.mov(ptr(asmjit::x86::rdx, asmjit::x86::rcx, 2), asmjit::x86::eax); // mov [rdx+rcx*4], eax
+
+		if (instructionBufferJmpDistance == 0)
+		{
+			a.add(dword_ptr(asmjit::x86::rbp, rbpOffset), -1); // add dword ptr [rbp+rbpOffset], 0FFFFFFFFh
+		}
+		else
+		{
+			//printf("instructionBufferJmpDistance: %x\n", instructionBufferJmpDistance);
+			// https://forum.osdev.org/viewtopic.php?p=168467#p168467
+			// push the desired address on to the stack and then perform a 64 bit RET
+
+			a.add(asmjit::x86::rsp, 0x8); // pop return address off the stack cause we will jump
+			uint64_t addressToJump = 0;
+			
+			// TODO: just use jumpDistance once we got a working test case
+			if (jumpDistanceNegative)
+				addressToJump = (uint64_t)functionAddress + jumpDistance + 0x8; // 0x8 call instruction + offset + 2 nops
+			else
+				addressToJump = (uint64_t)functionAddress + instructionBufferJmpDistance + 0x8; // 0x8 call instruction + offset + 2 nops
+
+			a.mov(asmjit::x86::r11, addressToJump);	// r11 is being used but should be fine based on documentation
+			
+			// on jmp checksums we do the rsp add earlier
+			a.add(asmjit::x86::rsp, 0x8); // since we dont pop off rax we need to sub 0x8 the rsp
+			a.push(asmjit::x86::r11);
+		}
+
+		a.ret();
+
+		void* asmjitResult = nullptr;
+		runtime.add(&asmjitResult, &code);
+		
+		// copy over the content to the stub
+		uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+		memcpy(tempBuffer, asmjitResult, code.codeSize());
+		memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+		const int callInstructionBytes = 8;
+		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+		DWORD old_protect{};
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memset(functionAddress, 0, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		uint8_t jmpInstructionBuffer[callInstructionBytes] = {};
+		jmpInstructionBuffer[0] = 0xE8;
+		jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+		jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+		jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+		jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+		jmpInstructionBuffer[5] = 0x90;
+		jmpInstructionBuffer[6] = 0x90;
+		jmpInstructionBuffer[7] = 0x90;
+
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		splitChecksumHook splitChecksum;
+		splitChecksum.functionAddress = (uint64_t*)functionAddress;
+		memcpy(splitChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * 8);
+		splitchecksumHooks.push_back(splitChecksum);
+	}
+}
+
 LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 {
 	if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT)
@@ -1574,6 +1995,9 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			{
 				// function is wrong or something...
 				printf("executing...\n");
+				
+				nopChecksumFixingMemcpy();
+
 				SetScreen(11);
 				LobbyBaseSetNetworkmode(1);
 				SessionState(1);
@@ -1653,457 +2077,7 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			counter++;
 
 			if (counter == 5)
-			{
-				// get size of image from codcw
-				uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
-				IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
-				IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
-				auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
-				uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
-
-				nopChecksumFixingMemcpy();
-
-				hook::pattern locationsIntact = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 45 ? FF");
-				hook::pattern locationsIntactBig = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 85");
-				hook::pattern locationsSplit = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A E9");
-				size_t intactCount = locationsIntact.size();
-				size_t intactBigCount = locationsIntactBig.size();
-				size_t splitCount = locationsSplit.size();
-				const size_t allocationSize = sizeof(uint8_t) * 128;
-
-				printf("p %d\n", intactCount);
-				printf("p %d\n", intactBigCount);
-				printf("p %d\n", splitCount);
-
-				// TODO: refactor this later so we for loop through all the address locations
-				// and only do things based on the differences between every checksum type
-
-				// intact
-				for (int i=0; i < intactCount; i++)
-				{
-
-				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
-				memset(asmStubLocation, 0x90, allocationSize);
-				void* functionAddress = locationsIntact.get(i).get<void*>(0); // locationsIntact.get(i)
-				uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
-
-				// backup instructions that will get destroyed
-				const int length = sizeof(uint8_t) * 8;
-				uint8_t instructionBuffer[8] = {};
-				memcpy(instructionBuffer, functionAddress, length);
-
-				uint32_t instructionBufferJmpDistance = 0;
-				if (instructionBuffer[3] == 0xE9)
-					memcpy(&instructionBufferJmpDistance, (char*)functionAddress+0x4, 4); // 0x4 so we skip 0xE9
-
-				// create assembly stub content
-				static asmjit::JitRuntime runtime;
-				asmjit::CodeHolder code;
-				code.init(runtime.environment());
-				asmjit::x86::Assembler a(&code);
-
-				uint64_t rbpOffset = instructionBuffer[5];
-				
-				/*
-				asmjit::Label L1 = a.newLabel();
-				a.bind(L1);
-				a.jmp(L1);
-				*/
-
-				a.sub(asmjit::x86::rsp, 0x400); // 0x40? 0x32 before
-				pushad64();
-
-				//a.mov(asmjit::x86::rax, (uint64_t)(void*)SuspendAllThreads);
-				//a.call(asmjit::x86::rax);
-
-				// TODO: Find out a way to create our own allocated stack and modify rsp and rbp to use it
-				// once we come out of the function we restore rsp and rbp back to normal
-
-				a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x20), asmjit::x86::rax);
-				a.mov(asmjit::x86::rdx, asmjit::x86::rcx);	// offset within text section pointer (ecx*4)
-				a.mov(asmjit::x86::rcx, rbpOffset);
-
-				a.mov(asmjit::x86::r8, asmjit::x86::rbp);
-				a.mov(asmjit::x86::r9, instructionBufferJmpDistance);	// incase we mess up a split checksum
-				a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
-				a.call(asmjit::x86::rax);
-				a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
-												// TODO: remove these changes including the utils.h whenever we figure out why we are crashing from checksum failures
-
-				//popad64();
-				popad64WithoutRAX();
-				a.add(asmjit::x86::rsp, 0x400);
-
-				a.mov(ptr(asmjit::x86::rdx, asmjit::x86::rcx, 2), asmjit::x86::eax); // mov [rdx+rcx*4], eax
-
-				if (instructionBufferJmpDistance == 0)
-				{
-					a.add(dword_ptr(asmjit::x86::rbp, rbpOffset), -1); // add dword ptr [rbp+rbpOffset], 0FFFFFFFFh
-				}
-				else
-				{
-					// printf("instructionBufferJmpDistance: %x\n", instructionBufferJmpDistance);
-					// https://forum.osdev.org/viewtopic.php?p=168467#p168467
-					// push the desired address on to the stack and then perform a 64 bit RET
-
-					// jmp loc_7FF641C707A5
-					a.add(asmjit::x86::rsp, 0x8); // pop return address off the stack cause we will jump
-					uint64_t addressToJump = (uint64_t)functionAddress + instructionBufferJmpDistance;
-					a.mov(asmjit::x86::r11, addressToJump);	// r11 is being used but should be fine based on documentation
-					a.push(asmjit::x86::r11);
-				}
-
-				a.add(asmjit::x86::rsp, 0x8); // since we dont pop off rax we need to sub 0x8 the rsp
-				a.ret();
-
-				void* asmjitResult = nullptr;
-				runtime.add(&asmjitResult, &code);
-				
-				// copy over the content to the stub
-				uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
-				memcpy(tempBuffer, asmjitResult, code.codeSize());
-				memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
-
-				const int callInstructionBytes = 7;
-				const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
-
-				DWORD old_protect{};
-				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
-				memset(functionAddress, 0, callInstructionLength);
-				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
-				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
-
-				// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
-				uint8_t jmpInstructionBuffer[callInstructionBytes] = {};
-				jmpInstructionBuffer[0] = 0xE8;
-				jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
-				jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
-				jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
-				jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
-				jmpInstructionBuffer[5] = 0x90;
-				jmpInstructionBuffer[6] = 0x90;
-
-				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
-				memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
-				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
-				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
-
-				// temporary way to test if this would get us into the game all the time
-				// we basically overwrite at a set small time the instructions from a different thread cause
-				// arxan is currently undoing our checksum fixes
-				intactChecksumHook intactChecksum;
-				intactChecksum.functionAddress = (uint64_t*)functionAddress;
-				memcpy(intactChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * 7);
-				intactchecksumHooks.push_back(intactChecksum);
-
-				}
-
-				// big intact
-				for (int i=0; i < intactBigCount; i++)
-				{
-
-				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
-				memset(asmStubLocation, 0x90, allocationSize);
-				void* functionAddress = locationsIntactBig.get(i).get<void*>(0); // locationsIntact.get(i)
-				//void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
-				uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
-			
-				// backup instructions that will get destroyed
-				const int length = sizeof(uint8_t) * 8;
-				uint8_t instructionBuffer[8] = {};
-				memcpy(instructionBuffer, functionAddress, length);
-
-				uint32_t instructionBufferJmpDistance = 0;
-				if (instructionBuffer[3] == 0xE9)
-					memcpy(&instructionBufferJmpDistance, (char*)functionAddress+0x4, 4); // 0x4 so we skip 0xE9
-
-				// create assembly stub content
-				static asmjit::JitRuntime runtime;
-				asmjit::CodeHolder code;
-				code.init(runtime.environment());
-				asmjit::x86::Assembler a(&code);
-
-				uint64_t rbpOffset = instructionBuffer[5];
-
-				//pushad64();
-				//a.sub(asmjit::x86::rsp, 0x40); // 0x40? 0x32 before
-
-				a.sub(asmjit::x86::rsp, 0x400); // 0x40? 0x32 before
-				pushad64();
-
-				//a.mov(asmjit::x86::rax, (uint64_t)(void*)SuspendAllThreads);
-				//a.call(asmjit::x86::rax);
-
-				a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x20), asmjit::x86::rax);
-				a.mov(asmjit::x86::rdx, asmjit::x86::rcx);		// offset within text section pointer (ecx*4)
-				a.mov(asmjit::x86::rcx, 0x120); 				// we dont use rbpoffset since we only get 1 byte from the 2 byte offset (rbpOffset)
-																// 0x130 is a good starting ptr to decrement downwards so we can find the original checksum
-				
-				a.mov(asmjit::x86::r8, asmjit::x86::rbp);				// we need this so we know what stack the stub was at
-				a.mov(asmjit::x86::r9, instructionBufferJmpDistance);	// incase we mess up a split checksum
-				a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
-				a.call(asmjit::x86::rax);
-				a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
-
-				//a.add(asmjit::x86::rsp, 0x40);
-				//popad64();
-				popad64WithoutRAX();
-				a.add(asmjit::x86::rsp, 0x400);
-
-				a.mov(ptr(asmjit::x86::rdx, asmjit::x86::rcx, 2), asmjit::x86::eax); // mov [rdx+rcx*4], eax
-
-				if (instructionBufferJmpDistance == 0)
-				{
-					// TODO: big intact functions the way we are getting rbpOffset needs another byte for it to work
-					// do this for now kinda scuffed
-					rbpOffset += 0x100;
-					a.add(dword_ptr(asmjit::x86::rbp, rbpOffset), -1); // add dword ptr [rbp+rbpOffset], 0FFFFFFFFh
-				}
-				else
-				{
-					//printf("instructionBufferJmpDistance: %x\n", instructionBufferJmpDistance);
-					// https://forum.osdev.org/viewtopic.php?p=168467#p168467
-					// push the desired address on to the stack and then perform a 64 bit RET
-
-					// jmp loc_7FF641C707A5
-					a.add(asmjit::x86::rsp, 0x8); // pop return address off the stack cause we will jump
-					uint64_t addressToJump = (uint64_t)functionAddress + instructionBufferJmpDistance;
-					a.mov(asmjit::x86::r11, addressToJump);	// r11 is being used but should be fine based on documentation
-					a.push(asmjit::x86::r11);
-				}
-
-				a.add(asmjit::x86::rsp, 0x8); // since we dont pop off rax we need to sub 0x8 the rsp
-				a.ret();
-
-				void* asmjitResult = nullptr;
-				runtime.add(&asmjitResult, &code);
-				
-				// copy over the content to the stub
-				uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
-				memcpy(tempBuffer, asmjitResult, code.codeSize());
-				memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
-
-				const int callInstructionBytes = 7 + 3; // three more nops on big intact
-				const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
-
-				DWORD old_protect{};
-				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
-				memset(functionAddress, 0, callInstructionLength);
-				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
-				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
-
-				// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
-				uint8_t jmpInstructionBuffer[callInstructionBytes] = {};
-				jmpInstructionBuffer[0] = 0xE8;
-				jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
-				jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
-				jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
-				jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
-				jmpInstructionBuffer[5] = 0x90;
-				jmpInstructionBuffer[6] = 0x90;
-				// TODO: on big intact checksums we fuck up the instructions with the call
-				// check if the same thing happens on regular intact checksums
-				jmpInstructionBuffer[7] = 0x90;
-				jmpInstructionBuffer[8] = 0x90;
-				jmpInstructionBuffer[9] = 0x90;
-
-				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
-				memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
-				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
-				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
-
-				intactBigChecksumHook intactBigChecksum;
-				intactBigChecksum.functionAddress = (uint64_t*)functionAddress;
-				memcpy(intactBigChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * (7+3));
-				intactBigchecksumHooks.push_back(intactBigChecksum);
-				
-				}
-
-				// splitCount
-				for (int i=0; i < splitCount; i++)
-				{
-
-				LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
-				memset(asmStubLocation, 0x90, allocationSize);
-				void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
-				//void* functionAddress = locationsSplit.get(i).get<void*>(0); // locationsIntact.get(i)
-				uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
-
-				// backup instructions that will get destroyed
-				const int length = sizeof(uint8_t) * 8;
-				uint8_t instructionBuffer[8] = {};
-				memcpy(instructionBuffer, functionAddress, length);
-
-				uint32_t instructionBufferJmpDistance = 0;
-				if (instructionBuffer[3] == 0xE9)
-					memcpy(&instructionBufferJmpDistance, (char*)functionAddress+0x4, 4); // 0x4 so we skip 0xE9
-
-				// TODO: fix negative instructionBufferJmpDistance when we are trying to get the rbpOffset
-				/*
-				static int huhCounter = 0;
-				huhCounter++;
-				if (huhCounter == 7)
-				{
-					SuspendAllThreads();
-					__debugbreak();
-				}
-				*/
-
-				bool jumpDistanceNegative = instructionBufferJmpDistance >> 31; // get sign bit from jump distance
-				//int32_t jumpDistance = 0;
-				int32_t jumpDistance = instructionBufferJmpDistance;
-
-				// convert the hex number to a negative int
-				//if (jumpDistanceNegative)
-				//	jumpDistance = instructionBufferJmpDistance | 0xff << 24;
-
-				// TODO: receive the rbpOffset by going through the jmp instruction
-				// on big rbp offsets we could do the same hack we did on big intact where we do rbpOffset+0x100 if its below 0x60
-				uint64_t rbpOffset = 0x0;
-				char* rbpOffsetPtr = nullptr;
-
-				// TODO: just use jumpDistance once we got a working test case
-				if (jumpDistanceNegative)
-					rbpOffsetPtr = (char*)((uint64_t)functionAddress+jumpDistance+0x8);
-				else
-					rbpOffsetPtr = (char*)((uint64_t)functionAddress+instructionBufferJmpDistance+0x8);
-
-				rbpOffsetPtr++;
-
-				// depending on the rbp offset from add dword ptr we need one more byte for the rbpOffset
-				if (*(unsigned char*)rbpOffsetPtr == 0x45) 		// add dword ptr [rbp+68],-01
-				{
-					rbpOffsetPtr++;
-					rbpOffset = *(char*)rbpOffsetPtr;
-				}
-				else if (*(unsigned char*)rbpOffsetPtr == 0x85)	// add dword ptr [rbp+1CC],-01
-				{
-					rbpOffsetPtr++;
-					rbpOffset = *(short*)rbpOffsetPtr;
-				}
-
-
-				// create assembly stub content
-				static asmjit::JitRuntime runtime;
-				asmjit::CodeHolder code;
-				code.init(runtime.environment());
-				asmjit::x86::Assembler a(&code);
-
-				// pushad64();
-				// a.sub(asmjit::x86::rsp, 0x40); // 0x40? 0x32 before
-
-				a.sub(asmjit::x86::rsp, 0x400); // 0x40? 0x32 before
-				pushad64();
-
-				/*
-				asmjit::Label L1 = a.newLabel();
-				a.bind(L1);
-				a.int3();
-				a.jmp(L1);
-				*/
-
-				a.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x20), asmjit::x86::rax);
-				a.mov(asmjit::x86::rdx, asmjit::x86::rcx);	// offset within text section pointer (ecx*4)
-				a.mov(asmjit::x86::rcx, rbpOffset);
-
-				a.mov(asmjit::x86::r8, asmjit::x86::rbp);	// we need this so we know what stack the stub was at
-				
-				// TODO: check if this is still fucked, the value is actually 0xfedef2b2 not 0xffdef2b2
-				// since we swap out the last byte we mess up the jump distance
-				/*
-				if (jumpDistance == 0xffdef2b2)
-				{
-					SuspendAllThreads();
-					__debugbreak();
-				}
-				*/
-
-				if (jumpDistanceNegative)
-					a.mov(asmjit::x86::r9, jumpDistance);
-				else
-					a.mov(asmjit::x86::r9, instructionBufferJmpDistance);
-
-				a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
-				a.call(asmjit::x86::rax);
-				a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
-
-				//a.add(asmjit::x86::rsp, 0x40);
-				//popad64();
-
-				popad64WithoutRAX();
-				a.add(asmjit::x86::rsp, 0x400);
-
-				a.mov(ptr(asmjit::x86::rdx, asmjit::x86::rcx, 2), asmjit::x86::eax); // mov [rdx+rcx*4], eax
-
-				if (instructionBufferJmpDistance == 0)
-				{
-					a.add(dword_ptr(asmjit::x86::rbp, rbpOffset), -1); // add dword ptr [rbp+rbpOffset], 0FFFFFFFFh
-				}
-				else
-				{
-					//printf("instructionBufferJmpDistance: %x\n", instructionBufferJmpDistance);
-					// https://forum.osdev.org/viewtopic.php?p=168467#p168467
-					// push the desired address on to the stack and then perform a 64 bit RET
-
-					a.add(asmjit::x86::rsp, 0x8); // pop return address off the stack cause we will jump
-					uint64_t addressToJump = 0;
-					
-					// TODO: just use jumpDistance once we got a working test case
-					if (jumpDistanceNegative)
-						addressToJump = (uint64_t)functionAddress + jumpDistance + 0x8; // 0x8 call instruction + offset + 2 nops
-					else
-						addressToJump = (uint64_t)functionAddress + instructionBufferJmpDistance + 0x8; // 0x8 call instruction + offset + 2 nops
-
-					a.mov(asmjit::x86::r11, addressToJump);	// r11 is being used but should be fine based on documentation
-					
-					// on jmp checksums we do the rsp add earlier
-					a.add(asmjit::x86::rsp, 0x8); // since we dont pop off rax we need to sub 0x8 the rsp
-					a.push(asmjit::x86::r11);
-				}
-
-				a.ret();
-
-				void* asmjitResult = nullptr;
-				runtime.add(&asmjitResult, &code);
-				
-				// copy over the content to the stub
-				uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
-				memcpy(tempBuffer, asmjitResult, code.codeSize());
-				memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
-
-				const int callInstructionBytes = 8;
-				const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
-
-				DWORD old_protect{};
-				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
-				memset(functionAddress, 0, callInstructionLength);
-				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
-				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
-
-				// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
-				uint8_t jmpInstructionBuffer[callInstructionBytes] = {};
-				jmpInstructionBuffer[0] = 0xE8;
-				jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
-				jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
-				jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
-				jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
-				jmpInstructionBuffer[5] = 0x90;
-				jmpInstructionBuffer[6] = 0x90;
-				jmpInstructionBuffer[7] = 0x90;
-
-				VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
-				memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
-				VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
-				FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
-
-				splitChecksumHook splitChecksum;
-				splitChecksum.functionAddress = (uint64_t*)functionAddress;
-				memcpy(splitChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * 8);
-				splitchecksumHooks.push_back(splitChecksum);
-
-				}
-
-			}
+				createInlineAsmStub();
 
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
@@ -2460,12 +2434,10 @@ int main()
 	char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF641E3CD6E - StartOfBinary);
 	placeHardwareBP(bpAddr2, 2, Condition::Execute);
 
-	// TODO: try doing our inline hooks after it checked our last checksum comparison location
-
 	// arxan self healing changes back this hook
 	//char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF6413597B5 - StartOfBinary);
-	//char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF640324847 - StartOfBinary);
-	//placeHardwareBP(bpAddr1, 3, Condition::Execute);
+	char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7ff6418ca8f5 - StartOfBinary);
+	placeHardwareBP(bpAddr1, 3, Condition::Write);
 
 	//char* bpAddr4 = reinterpret_cast<char*>(baseAddr + 0x7FF641E3CD6E - StartOfBinary);
 	//placeHardwareBP(bpAddr4, 1, Condition::Execute);
