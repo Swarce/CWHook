@@ -1494,19 +1494,6 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	return originalChecksum;
 }
 
-enum checksumType {
-	intactSmall,
-	intactBig,
-	split
-};
-
-struct inlineAsmStub {
-	void* functionAddress;
-	uint8_t* buffer;
-	size_t bufferSize;
-	checksumType type;
-};
-
 void createInlineAsmStub()
 {
 	hook::pattern locationsIntact = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 45 ? FF");

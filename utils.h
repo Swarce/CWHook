@@ -103,6 +103,19 @@ struct splitChecksumHook
 	uint8_t buffer[8];
 };
 
+enum checksumType {
+	intactSmall,
+	intactBig,
+	split
+};
+
+struct inlineAsmStub {
+	void* functionAddress;
+	uint8_t* buffer;
+	size_t bufferSize;
+	checksumType type;
+};
+
 bool RtlUnicodeStringContains(PUNICODE_STRING Str, PUNICODE_STRING SubStr, BOOLEAN CaseInsensitive)
 {
 	if (Str == nullptr || SubStr == nullptr || Str->Length < SubStr->Length)
