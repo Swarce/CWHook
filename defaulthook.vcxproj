@@ -188,7 +188,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="arxan.cpp" />
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="exceptions.cpp" />
+    <ClCompile Include="gamehooks.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64assembler.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64builder.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64compiler.cpp" />
@@ -256,11 +259,16 @@
     <ClCompile Include="libs\minhook\src\trampoline.c" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="restorentdll.cpp" />
+    <ClCompile Include="systemhooks.cpp" />
+    <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="powrprof.asm" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="arxan.h" />
+    <ClInclude Include="exceptions.h" />
+    <ClInclude Include="gamehooks.h" />
     <ClInclude Include="gamestructs.h" />
     <ClInclude Include="gdll.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\a64.h" />
@@ -367,6 +375,7 @@
     <ClInclude Include="main.h" />
     <ClInclude Include="notes.h" />
     <ClInclude Include="restorentdll.h" />
+    <ClInclude Include="systemhooks.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="winstructs.h" />
   </ItemGroup>

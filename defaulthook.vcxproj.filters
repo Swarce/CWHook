@@ -240,6 +240,21 @@
     <ClCompile Include="libs\asmjit\src\asmjit\x86\x86rapass.cpp">
       <Filter>Source Files\asmjit\x86</Filter>
     </ClCompile>
+    <ClCompile Include="systemhooks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="exceptions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="arxan.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="gamehooks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="main.h">
@@ -565,6 +580,18 @@
     </ClInclude>
     <ClInclude Include="libs\asmjit\src\asmjit\x86\x86rapass_p.h">
       <Filter>Source Files\asmjit\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="systemhooks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="exceptions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="arxan.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gamehooks.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
