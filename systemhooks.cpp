@@ -28,6 +28,7 @@
 #include "restorentdll.h"
 #include "utils.h"
 #include "systemhooks.h"
+#include "exceptions.h"
 
 bool weAreDebugging = false;
 HANDLE inputHandle = nullptr;

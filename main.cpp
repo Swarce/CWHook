@@ -23,8 +23,6 @@
 #include "exceptions.h"
 #include "gamehooks.h"
 
-HANDLE exceptionHandle = nullptr;
-
 int mainThreadId = 0;
 char* baseFuncAddr = nullptr;
 

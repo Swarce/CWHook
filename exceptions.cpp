@@ -23,6 +23,8 @@
 #include "exceptions.h"
 #include "gamehooks.h"
 
+HANDLE exceptionHandle = nullptr;
+
 LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 {
 	if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT)

@@ -8,3 +8,4 @@
 #include <minidumpapiset.h>
 
 LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info);
+extern HANDLE exceptionHandle;
