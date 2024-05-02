@@ -134,6 +134,35 @@ uint32_t reverse_bytes(uint32_t bytes);
 				a.pop(asmjit::x86::rdx);	\
 				a.pop(asmjit::x86::rcx);
 
+// TODO: if i remove any of the r15 14 13 registers on the popad64 macro it crashes the game
+// think we messed up the stack or something on the checksum stub generation
+// fix it later, for now use these so we can actually use the r12-r15 registers since those are non violatile
+#define pushad64_Min() a.push(asmjit::x86::rax); 	\
+				a.push(asmjit::x86::rcx); 	\
+				a.push(asmjit::x86::rdx);	\
+				a.push(asmjit::x86::rbx);	\
+				a.push(asmjit::x86::rsp);	\
+				a.push(asmjit::x86::rbp);	\
+				a.push(asmjit::x86::rsi);	\
+				a.push(asmjit::x86::rdi);	\
+				a.push(asmjit::x86::r8);	\
+				a.push(asmjit::x86::r9);	\
+				a.push(asmjit::x86::r10);	\
+				a.push(asmjit::x86::r11);
+
+
+#define popad64_Min() a.pop(asmjit::x86::r11);	\
+				a.pop(asmjit::x86::r10);	\
+				a.pop(asmjit::x86::r9);		\
+				a.pop(asmjit::x86::r8);		\
+				a.pop(asmjit::x86::rdi);	\
+				a.pop(asmjit::x86::rsi);	\
+				a.pop(asmjit::x86::rbp);	\
+				a.pop(asmjit::x86::rsp);	\
+				a.pop(asmjit::x86::rbx);	\
+				a.pop(asmjit::x86::rdx);	\
+				a.pop(asmjit::x86::rcx);	\
+				a.pop(asmjit::x86::rax);
 
 
 /*
