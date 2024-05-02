@@ -36,6 +36,9 @@ std::vector<intactChecksumHook> intactchecksumHooks;
 std::vector<intactBigChecksumHook> intactBigchecksumHooks;
 std::vector<splitChecksumHook> splitchecksumHooks;
 
+inlineAsmStub* inlineStubs = nullptr;
+size_t stubCounter = 0;
+
 int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
 {
 	// get size of image from codcw
@@ -293,10 +296,9 @@ void createInlineAsmStub()
 	size_t intactBigCount = locationsIntactBig.size();
 	size_t splitCount = locationsSplit.size();
 	size_t totalCount = intactCount + intactBigCount + splitCount;
-	size_t stubCounter = 0;
 
 	const size_t allocationSize = sizeof(uint8_t) * 128;
-	inlineAsmStub* inlineStubs = (inlineAsmStub*)malloc(sizeof(inlineAsmStub) * totalCount);
+	inlineStubs = (inlineAsmStub*)malloc(sizeof(inlineAsmStub) * totalCount);
 
 	for (int i=0; i < intactCount; i++)
 	{
@@ -499,6 +501,7 @@ void createInlineAsmStub()
 			intactChecksumHook intactChecksum;
 			intactChecksum.functionAddress = (uint64_t*)functionAddress;
 			memcpy(intactChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * inlineStubs[i].bufferSize);
+			inlineStubs[i].buffer = intactChecksum.buffer;
 			intactchecksumHooks.push_back(intactChecksum);
 		}
 
@@ -507,6 +510,7 @@ void createInlineAsmStub()
 			intactBigChecksumHook intactBigChecksum;
 			intactBigChecksum.functionAddress = (uint64_t*)functionAddress;
 			memcpy(intactBigChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * inlineStubs[i].bufferSize);
+			inlineStubs[i].buffer = intactBigChecksum.buffer;
 			intactBigchecksumHooks.push_back(intactBigChecksum);
 		}
 
@@ -515,6 +519,7 @@ void createInlineAsmStub()
 			splitChecksumHook splitChecksum;
 			splitChecksum.functionAddress = (uint64_t*)functionAddress;
 			memcpy(splitChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * inlineStubs[i].bufferSize);
+			inlineStubs[i].buffer = splitChecksum.buffer;
 			splitchecksumHooks.push_back(splitChecksum);
 		}
 	}
