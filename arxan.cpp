@@ -529,16 +529,125 @@ void createInlineAsmStub()
 	printf("p %d\n", splitCount);
 }
 
-// TODO: create an inline stub cause just noping the instruction out doesnt work
+bool arxanHealingChecksum(uint64_t rbp)
+{
+	//printf("checksum healing called\n");
+	//SuspendAllThreads();
+	//__debugbreak();
+
+	// check if rbpAddressLocationPtr is within the range of 8 bytes up & down from every checksum that we placed.
+	// if true then replace rbp+0x18 with rbp+0x10, this might not work if it does something more to rbp+0x18 afterwards
+	// we could also do a quick register comparison so we don't do "mov [rdx], eax"
+	uint64_t rbpAddressLocationPtr = *(uint64_t*)(rbp+0x10);
+
+	for (int i=0; i < stubCounter; i++)
+	{
+		if (rbpAddressLocationPtr+0x8 >= (uint64_t)inlineStubs[i].functionAddress && rbpAddressLocationPtr-0x8 <= (uint64_t)inlineStubs[i].functionAddress)
+		{
+			printf("checksum fixer is trying to fix our inline function: %llx\n", (uint64_t)inlineStubs[i].functionAddress);
+			//SuspendAllThreads();
+			//while (true)
+			//	Sleep(10);
+
+			//__debugbreak();
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// TODO: create another checksum stub generator for
+// 48 8B 45 18 48 8B 55 10 8B 00 89 02 E9
+
 void nopChecksumFixingMemcpy()
 {
-	return;
-
 	hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "89 02 8B 45 20 83 C0 FC E9");
 	size_t checksumFixersCount = checksumFixers.size();
-	
+	const size_t allocationSize = sizeof(uint8_t) * 128;
+
+	//SuspendAllThreads();
+
 	for (int i=0; i < checksumFixersCount; i++)
-	{
+	{	
+		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		memset(asmStubLocation, 0x90, allocationSize);
 		void* functionAddress = checksumFixers.get(i).get<void*>(0);
+
+		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5;
+
+		// backup instructions that will get destroyed
+		const int length = 8;
+		uint8_t instructionBuffer[length] = {};
+		memcpy(instructionBuffer, functionAddress, sizeof(uint8_t) * length);
+
+		static asmjit::JitRuntime runtime;
+		asmjit::CodeHolder code;
+		code.init(runtime.environment());
+
+		using namespace asmjit::x86;
+		Assembler a(&code);
+
+/*
+	mov     rax, [rbp+18h]
+	mov     rdx, [rbp+10h]
+	jmp     loc_7FF631D8DD25
+	mov     [rdx], eax
+	mov     eax, [rbp+20h]
+	add     eax, 0FFFFFFFCh
+*/
+
+		a.sub(rsp, 0x32);
+		pushad64_Min();
+		a.mov(rcx, rbp);
+		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
+		a.call(r15);
+		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+
+		popad64_Min();
+		a.add(rsp, 0x32);
+
+		asmjit::Label L1 = a.newLabel();
+		a.cmp(r15, 1);
+		a.je(L1);
+		a.mov(qword_ptr(rdx), eax);	// dont replace our checksum if r15 is 1
+		a.bind(L1);
+		a.mov(eax, qword_ptr(rbp, 0x20));
+		a.add(eax, -4);
+		a.ret();
+
+
+		void* asmjitResult = nullptr;
+		runtime.add(&asmjitResult, &code);
+
+		// copy over the content to the stub
+		uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+		memcpy(tempBuffer, asmjitResult, code.codeSize());
+		memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+		const int callInstructionBytes = 8;
+		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+		DWORD old_protect{};
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memset(functionAddress, 0, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		uint8_t* jmpInstructionBuffer = (uint8_t*)malloc(sizeof(uint8_t) * callInstructionBytes);
+		jmpInstructionBuffer[0] = 0xE8;
+		jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+		jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+		jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+		jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+		jmpInstructionBuffer[5] = 0x90;
+		jmpInstructionBuffer[6] = 0x90;
+		jmpInstructionBuffer[7] = 0x90;
+
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
 	}
 }
