@@ -41,7 +41,8 @@ int main()
 	freopen("CONIN$", "r", stdin);
 	freopen("CONOUT$", "w", stdout);
 	freopen("CONOUT$", "w", stderr);
-	//inputHandle = CreateThread(nullptr, 0, ConsoleInput, module, 0, nullptr);
+	//inputHandle = CreateThread(nullptr, 0, ConsoleInput, module, 0, &inputThreadId);
+	//printf("inputThreadId: %llx\n", inputThreadId);
 
 	RestoreNtdllDbgFunctions();
 	MH_Initialize();

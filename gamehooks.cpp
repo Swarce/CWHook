@@ -8,7 +8,8 @@
 #include <TlHelp32.h>
 #include <mmeapi.h>
 
-#include <string.h>
+#include <string>
+#include <iostream>
 #include <stdio.h>
 #include <intrin.h>
 
@@ -17,7 +18,8 @@
 
 #include "libs/minhook/include/MinHook.h"
 #include "gamehooks.h"
-#include "exceptions.h"
+#include "systemhooks.h"
+#include "utils.h"
 
 const char* disconnectCvar = "disconnect\n";
 
@@ -115,38 +117,28 @@ void InitializeGameHooks()
 }
 
 // this currently will crash the game because arxan does not like that we have threads running that didn't get spawned by the game explicitly
-/*
 DWORD WINAPI ConsoleInput(LPVOID lpReserved)
 {
+	bool setHWBP = false;
 	while (true)
 	{
 		std::string input;
 		getline(std::cin, input);
 
-		if (strcmp(input.c_str(), "b") == 0)
-		{
-			if (gameHandle != nullptr)
-				ResumeThread(gameHandle);
-		}
-		else if (strcmp(input.c_str(), "a") == 0)
+		if (setHWBP)
 		{
 			uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
-
-			SetScreen(10);
-			LobbyBaseSetNetworkmode(1);
-			SessionState(1);
-
-			*discordSet1 = 1;
-			*discordSet2 = 1;
-
-			SetScreen(11);
+			uint64_t hwbpAddress = strtoll(input.c_str(), NULL, 16);
+			char* bpAddr1 = reinterpret_cast<char*>(baseAddr + hwbpAddress - StartOfBinary);
+			placeHardwareBP(bpAddr1, 3, Condition::Write);
+			setHWBP = false;
 		}
-		else
+
+		if (strcmp(input.c_str(), "b") == 0)
 		{
-			CbufAddText(0, input.c_str());
-			printf("cmd: %s\n", input.c_str());
+			printf("set breakpoint\n");
+			setHWBP = true;
 		}
 	}
 	return 0;
 }
-*/

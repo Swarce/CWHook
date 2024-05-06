@@ -31,6 +31,7 @@
 #include "exceptions.h"
 
 bool weAreDebugging = false;
+DWORD inputThreadId = -1;
 HANDLE inputHandle = nullptr;
 HANDLE ntdllFileHandle = nullptr;
 HANDLE ntdllOriginalFileHandle = nullptr;
@@ -531,6 +532,9 @@ void SleepAllThreadsBesidesMainThread()
 		if (entry.th32OwnerProcessID == GetCurrentProcessId())
 		{
 			HANDLE currentThread = OpenThread(THREAD_ALL_ACCESS, true, entry.th32ThreadID);
+
+			if (inputThreadId == entry.th32ThreadID)
+				continue;
 
 			//if (currentThread == NULL)
 				//printf("couldn't openthread\n");
