@@ -115,9 +115,21 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 			if (counter == 5)
 			{
+				clock_t start_time = clock();
+				// TODO: precalculate the pointer locations so we don't have to pattern search
 				createInlineAsmStub();
 				disableTlsCallbacks();
 				nopChecksumFixingMemcpy();
+				nopChecksumFixingMemcpy2();
+				nopChecksumFixingMemcpy3();
+				nopChecksumFixingMemcpy4();
+				nopChecksumFixingMemcpy5();
+				nopChecksumFixingMemcpy6();
+				nopChecksumFixingMemcpy7();
+				nopChecksumFixingMemcpy8();
+				double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+				printf("creating inline hooks for checksums took: %f seconds\n", elapsed_time);
+
 				InitializeGameHooks();
 			}
 
