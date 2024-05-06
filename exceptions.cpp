@@ -66,6 +66,23 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 		if (info->ContextRecord->Dr6 & 0x1)
 		{
+			// get size of image from codcw
+			uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+			IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+			IMAGE_NT_HEADERS* pNTHeaders =(IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+			auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+			uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
+
+			if (exceptionAddr >= baseAddressStart && exceptionAddr <= baseAddressEnd)
+			{
+				static int counter = 0;
+				counter++;
+
+				printf("bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+				fprintf(logFile, "bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+				fflush(logFile);
+			}
+
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
 		}
