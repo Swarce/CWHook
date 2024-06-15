@@ -11,3 +11,4 @@ void nopChecksumFixingMemcpy5();
 void nopChecksumFixingMemcpy6();
 void nopChecksumFixingMemcpy7();
 void nopChecksumFixingMemcpy8();
+void nopChecksumFixingMemcpy9();

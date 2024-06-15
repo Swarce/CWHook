@@ -124,9 +124,10 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 				nopChecksumFixingMemcpy3();
 				nopChecksumFixingMemcpy4();
 				nopChecksumFixingMemcpy5();
-				nopChecksumFixingMemcpy6();
+				nopChecksumFixingMemcpy6(); // crashes the game with movzx change
 				nopChecksumFixingMemcpy7();
 				nopChecksumFixingMemcpy8();
+				nopChecksumFixingMemcpy9();
 				double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
 				printf("creating inline hooks for checksums took: %f seconds\n", elapsed_time);
 

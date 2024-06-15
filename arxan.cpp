@@ -298,6 +298,8 @@ void createInlineAsmStub()
 	size_t splitCount = locationsSplit.size();
 	size_t totalCount = intactCount + intactBigCount + splitCount;
 
+	printf("splitCount %d\n", splitCount);
+
 	const size_t allocationSize = sizeof(uint8_t) * 128;
 	inlineStubs = (inlineAsmStub*)malloc(sizeof(inlineAsmStub) * totalCount);
 
@@ -557,6 +559,92 @@ bool arxanHealingChecksum(uint64_t rbp)
 	return false;
 }
 
+void nopChecksumFixingMemcpy9()
+{
+	hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "48 8B 55 10 0F B6 00 88 02");
+	size_t checksumFixersCount = checksumFixers.size();
+	const size_t allocationSize = sizeof(uint8_t) * 128;
+
+	for (int i=0; i < checksumFixersCount; i++)
+	{
+		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		memset(asmStubLocation, 0x90, allocationSize);
+		void* functionAddress = checksumFixers.get(i).get<void*>(0);
+
+		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5;
+
+		// backup instructions that will get destroyed
+		const int length = 9;
+		uint8_t instructionBuffer[length] = {};
+		memcpy(instructionBuffer, functionAddress, sizeof(uint8_t) * length);
+
+		static asmjit::JitRuntime runtime;
+		asmjit::CodeHolder code;
+		code.init(runtime.environment());
+
+		using namespace asmjit::x86;
+		Assembler a(&code);
+
+		a.sub(rsp, 0x32);
+		pushad64_Min();
+		a.mov(rcx, rbp);
+		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
+		a.call(r15);
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
+
+		popad64_Min();
+		a.add(rsp, 0x32);
+
+		/*
+			mov     rdx, [rbp+10h]
+			movzx   eax, byte ptr [rax]
+			mov     [rdx], al
+		*/
+		asmjit::Label L1 = a.newLabel();
+		a.mov(rdx, qword_ptr(rbp, 0x10));
+		a.movzx(eax, byte_ptr(rax));
+		a.cmp(r15, 1);
+		a.je(L1);
+		a.mov(qword_ptr(rdx), al);
+		a.bind(L1);
+		a.ret();
+
+		void* asmjitResult = nullptr;
+		runtime.add(&asmjitResult, &code);
+
+		// copy over the content to the stub
+		uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+		memcpy(tempBuffer, asmjitResult, code.codeSize());
+		memcpy(asmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+		const int callInstructionBytes = 9;
+		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+		DWORD old_protect{};
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memset(functionAddress, 0, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		uint8_t* jmpInstructionBuffer = (uint8_t*)malloc(sizeof(uint8_t) * callInstructionBytes);
+		jmpInstructionBuffer[0] = 0xE8;
+		jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+		jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+		jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+		jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+		jmpInstructionBuffer[5] = 0x90;
+		jmpInstructionBuffer[6] = 0x90;
+		jmpInstructionBuffer[7] = 0x90;
+		jmpInstructionBuffer[8] = 0x90;
+
+		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
+		VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+	}
+}
+
 void nopChecksumFixingMemcpy8()
 {
 	hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "0F B6 00 88 02 E9");
@@ -597,7 +685,7 @@ void nopChecksumFixingMemcpy8()
 		a.mov(rcx, rbp);
 		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 		a.call(r15);
-		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 		popad64_Min();
 		a.add(rsp, 0x32);
@@ -694,7 +782,7 @@ void nopChecksumFixingMemcpy7()
 		a.mov(rcx, rbp);
 		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 		a.call(r15);
-		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 		popad64_Min();
 		a.add(rsp, 0x32);
@@ -778,7 +866,7 @@ void nopChecksumFixingMemcpy6()
 			uint64_t locationOfInstructionToNop = jumpInstruction + jumpDistance;
 			size_t callInstructionOffset = 5;	// 0xE8 ? ? ? ?
 
-			uint8_t instructionBytes[2] = {0x88, 0x02};	// mov [rdx], eax
+			uint8_t instructionBytes[2] = {0x88, 0x02};	// mov [rdx], al
 			if (memcmp(instructionBytes, (char*)locationOfInstructionToNop+callInstructionOffset, sizeof(uint8_t) * 2) == 0)
 			{
 				memset((char*)locationOfInstructionToNop+callInstructionOffset, 0x90, sizeof(uint8_t) * 2);
@@ -795,7 +883,7 @@ void nopChecksumFixingMemcpy6()
 				a.mov(rcx, rbp);
 				a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 				a.call(r15);
-				a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+				a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 				popad64_Min();
 				a.add(rsp, 0x32);
@@ -805,8 +893,8 @@ void nopChecksumFixingMemcpy6()
 				/*
 					mov     rax, [rbp+18h]
 					mov     rdx, [rbp+10h]
-					mov     eax, [rax]
-					mov     [rdx], eax
+					movzx   eax, byte ptr [rax]
+					mov     [rdx], al
 				*/
 				a.mov(rax, qword_ptr(rbp, 0x18));
 				a.mov(rdx, qword_ptr(rbp, 0x10));
@@ -901,7 +989,7 @@ void nopChecksumFixingMemcpy5()
 				a.mov(rcx, rbp);
 				a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 				a.call(r15);
-				a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+				a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 				popad64_Min();
 				a.add(rsp, 0x32);
@@ -993,7 +1081,7 @@ void nopChecksumFixingMemcpy4()
 		a.mov(rcx, rbp);
 		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 		a.call(r15);
-		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 		popad64_Min();
 		a.add(rsp, 0x32);
@@ -1086,7 +1174,7 @@ void nopChecksumFixingMemcpy3()
 		a.mov(rcx, rbp);
 		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 		a.call(r15);
-		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 		popad64_Min();
 		a.add(rsp, 0x32);
@@ -1177,7 +1265,7 @@ void nopChecksumFixingMemcpy2()
 		a.mov(rcx, rbp);
 		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 		a.call(r15);
-		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 		popad64_Min();
 		a.add(rsp, 0x32);
@@ -1271,7 +1359,7 @@ void nopChecksumFixingMemcpy()
 		a.mov(rcx, rbp);
 		a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
 		a.call(r15);
-		a.mov(r15, rax);	// if arxan tries to replace our checksum set r15 to 1
+		a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 		popad64_Min();
 		a.add(rsp, 0x32);
