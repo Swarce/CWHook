@@ -2,20 +2,20 @@
 
 /* anti debugging detection
 Game uses its own veh's
-Creates threads with hide from debugger flag
+Creates threads with hide from debugger flag, makes debugging impossible without using veh debugger from CE
 
 Restore NTDLL Dbg functions
-Hook DebugActiveProcess
-Hook CheckRemoteDebuggerPresent
-Hook NtQueryInformationThread to remove ThreadHideFromDebugger
-Hook NtSetInformationThread to remove ThreadHideFromDebugger
-Hook NtCreateThreadEx to remove THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER
-Hook NtCreateProcessEx
-Hook CreateProcessW and CreateProcessA for DEBUG_ONLY_THIS_PROCESS and DEBUG_PROCESS
+Calls CheckRemoteDebuggerPresent
+Calls NtQueryInformationThread with ThreadHideFromDebugger
+Calls NtSetInformationThread with ThreadHideFromDebugger
+Calls NtCreateThreadEx with THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER
 
+(old arxan build)
 First call to NtAllocateVirtualMemory allocates a private allocated chunk.
 Ntdll NtSetInformationThread and other functions get inserted into the chunk.
 NtSetInformationThread gets called from the chunk to hide the main thread from debuggers.
+
+Hooks KiUserApcDispatcher
 */
 
 /* anti dll injection
@@ -38,4 +38,108 @@ big intact and big split have those too but they dont point to the correct origi
 arxan fixes inline stubs at runtime, examples at
 7ff641fc00a3
 7ff641f322bb
+*/
+
+/* arxan decrypts encrypted text section with a key that it xor's the text section with
+48 BA ? ? ? ? ? ? ? ? E9
+
+mov rdx, 0x7FA6B73DD1E72C56         // xor key gets put into rdx
+mov rax,qword ptr ds:[rcx+rax+14]   // part of the encrypted text section gets put into rax
+xor rax,rdx                         // text section (rax) gets decrypted with key by xor'ing
+mov qword ptr ds:[rdx+rcx+14],rax   // replace part of the text section with the decrypted result
+*/
+
+/* arxan calling syscall from allocated chunks (08/30/23 Windows 7 is no longer supported?)
+compares the content of the function with "81 ? 4C 8B D1 B8"
+shifts the pointer 4 bytes forward so its only getting the syscall number
+
+if ( STACK[0xAD0] && *STACK[0xAD0] == 0xB8D18B4C )
+    LODWORD(STACK[0xC58]) = *(STACK[0xAD0] + 4);
+else
+    LODWORD(STACK[0xC58]) = 0;
+
+*(&STACK[0x590] + SLODWORD(STACK[0x530])) = STACK[0xC58];
+
+rax contains the address to the ntdll location from virtualalloc
+0x6C505B    | mov eax, [rax + 0x4]
+
+puts the syscall numbers in an array on the stack
+0x1E37B152  | mov [rsp + rax * 4 + 0x588], ecx
+
+// it does this for the NtQueryInformationThread syscall number too
+gets the syscall number from the array on the stack
+0x1CB7FF88  | mov eax, [rsp + rax + 0x588]  (NtSetInformationThread)
+
+rdx contains a location in the game's memory
+rcx is the offset
+0x6C9FA4    | mov [rdx + rcx + 0xC], rax    (NtSetInformationThread)
+
+gets the syscall number from the array on the stack
+0x1CF38DC7  | mov eax, [rsp + rax + 0x588]  (NtSetInformationThread)
+
+rdx contains a location in the game's memory
+rcx is the offset
+0x6CA374    | mov [rdx + rcx + 0xC], rax    (NtSetInformationThread)
+
+gets the syscall number from the array on the stack
+0x1E201F04  | mov eax, [rsp + rax + 0x588]  (NtSetInformationThread)
+
+rdx contains a location in the game's memory
+rcx is the offset
+0x6CA72A    | mov [rdx + rcx + 0xC], rax    (NtSetInformationThread)
+
+
+arxan on start up jmps to random ntdll function where syscall starts and jmps to it:
+    it doesnt do this with win32u, gdi32, user32
+        manually loads them but doesnt call anything from them????
+
+    hook ntdll.dll, every exported function and check if syscall number is correct?
+        bad for performance?
+        what if syscall instruction gets inlined?
+            syscall instruction never gets inlined
+
+    use hwbp's to manually keep track of attempts of starting/settings threads as debugger hidden?
+
+    ProcessInstrumentationCallback only tells you what rip location the syscall got called, the way they are calling ntdll syscalls wouldnt tell you what syscall got called. Need hypervisor or kernel driver with syscall hooks to know what syscall actually got called.
+
+    arxan doesnt call syscalls from anywhere else, checked with ProcessInstrumentationCallback
+
+    doesn't call readvirtualmemory to read process memory
+*/
+
+/*
+    arxan calling windows exported functions without including them in the IAT
+
+    at BlackOpsColdWar.exe+0xE426210
+    saves address location from user32 and win32u functions
+    will put them on the stack then call them from BlackOpsColdWar.exe+0xC11DF3
+        probably other locations too
+
+    NtUserInternalGetWindowText
+    NtUserGetWindowProcessHandle
+    NtUserGetTopLevelWindow
+    NtUserChildWindowFromPointEx
+    NtUserInternalGetWindowIcon
+    NtUserRealChildWindowFromPoint
+    NtUserWOWFindWindow
+    NtUserWindowFromDC
+    NtUserWindowFromPhysicalPoint
+    NtUserGetClassName
+
+    GetWindowThreadProcessId
+    EnumWindows
+    GetClassNameA
+    GetWindowTextA
+    EnumChildWindows
+    GetMenu
+    GetMenuStringA
+    GetSubMenu
+*/
+
+/*
+    use process hollowing to use reverse engineering programs by masking it with a legit program like notepad.exe etc since arxan does not do ntreadvirtualmemory on processes
+*/
+
+/*
+    check with ntdll registery open key etc syscalls if it tries to open up cheat engine tmp info
 */
