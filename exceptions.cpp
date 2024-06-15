@@ -24,6 +24,7 @@
 #include "gamehooks.h"
 
 HANDLE exceptionHandle = nullptr;
+std::vector<int> syscalls;
 
 LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 {
@@ -34,24 +35,6 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 	if (info->ExceptionRecord->ExceptionCode == STATUS_INVALID_HANDLE)
 	{
-		return EXCEPTION_CONTINUE_EXECUTION;
-	}
-
-	// Veh hooking
-	// PageGuardMemory(breakpointAddress, 1);
-	if (info->ExceptionRecord->ExceptionCode == EXCEPTION_GUARD_PAGE)
-	{
-		uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
-		uint64_t idaExceptionAddr = (uint64_t)info->ExceptionRecord->ExceptionAddress - baseAddr + StartOfTextSection - 0x1000;
-		uint64_t idaAddrAccessed = (uint64_t)info->ExceptionRecord->ExceptionInformation[1] - baseAddr + StartOfTextSection - 0x1000;
-
-		uint64_t addrInProcess = (uint64_t)info->ExceptionRecord->ExceptionAddress;
-		uint64_t addrAccessed = (uint64_t)info->ExceptionRecord->ExceptionInformation[1];
-
-		if (info->ExceptionRecord->ExceptionInformation[1] == reinterpret_cast<ULONG_PTR>(breakpointAddress))
-			printf("guard page hit %llx %llx %llx\n", idaExceptionAddr, addrInProcess, addrAccessed);
-
-		info->ContextRecord->EFlags |= 0x100;
 		return EXCEPTION_CONTINUE_EXECUTION;
 	}
 
@@ -73,15 +56,15 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
 			uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
 
-			if (exceptionAddr >= baseAddressStart && exceptionAddr <= baseAddressEnd)
-			{
-				static int counter = 0;
-				counter++;
+			static int counter = 0;
+			counter++;
 
-				printf("bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
-				fprintf(logFile, "bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
-				fflush(logFile);
-			}
+			printf("bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fprintf(logFile, "bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fflush(logFile);
+			
+			// do checksum at 0x1b5654f8
+			//info->ContextRecord->Dr1 = ((uint64_t)GetModuleHandle(nullptr) + 0x1b5654f8);
 
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
@@ -95,49 +78,48 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
 			uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
 
-			if (exceptionAddr >= baseAddressStart && exceptionAddr <= baseAddressEnd)
-			{
-				static int counter = 0;
-				counter++;
+			static int counter = 0;
+			counter++;
 
-				printf("bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
-				fprintf(logFile, "bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
-				fflush(logFile);
+			static int jmpCounter = 0;
+
+			printf("bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fprintf(logFile, "bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fflush(logFile);
+
+			// TODO: checksum late hooking // 0x1b5b8223
+/*
+			if (counter == 183099)
+			{
+				//info->ContextRecord->Dr1 = ((uint64_t)GetModuleHandle(nullptr) + 0x1dbc5fd3);
+
+				SuspendAllThreads();
+				__debugbreak();
 			}
 
+			if (counter == 183100)
+			{
+				info->ContextRecord->Dr1 = ((uint64_t)GetModuleHandle(nullptr) + 0x1BB2C7ED);
+				counter = 0;
+				jmpCounter++;
+
+				// 69384
+			}
+
+			if (counter == 69384 && jmpCounter == 1)
+			{
+				info->ContextRecord->Dr1 = ((uint64_t)GetModuleHandle(nullptr) + 0x1b5654f8);
+				counter = 0;
+				jmpCounter++;
+
+				//SuspendAllThreads();
+				//__debugbreak();
+			}
+*/
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
 		}
 		else if (info->ContextRecord->Dr6 & 0x4)
-		{
-			static int counter = 0;
-			counter++;
-
-			if (counter == 5)
-			{
-				clock_t start_time = clock();
-				// TODO: precalculate the pointer locations so we don't have to pattern search
-				createInlineAsmStub();
-				disableTlsCallbacks();
-				nopChecksumFixingMemcpy();
-				nopChecksumFixingMemcpy2();
-				nopChecksumFixingMemcpy3();
-				nopChecksumFixingMemcpy4();
-				nopChecksumFixingMemcpy5();
-				nopChecksumFixingMemcpy6(); // crashes the game with movzx change
-				nopChecksumFixingMemcpy7();
-				nopChecksumFixingMemcpy8();
-				nopChecksumFixingMemcpy9();
-				double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
-				printf("creating inline hooks for checksums took: %f seconds\n", elapsed_time);
-
-				InitializeGameHooks();
-			}
-
-			info->ContextRecord->EFlags |= ResumeFlag;
-			return EXCEPTION_CONTINUE_EXECUTION;
-		}
-		else if (info->ContextRecord->Dr6 & 0x8)
 		{
 			// get size of image from codcw
 			uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
@@ -146,14 +128,26 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
 			uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
 
-			if (exceptionAddr >= baseAddressStart && exceptionAddr <= baseAddressEnd)
-			{
-				static int counter = 0;
-				counter++;
+			static int counter = 0;
+			counter++;
 
-				printf("bp4: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
-				fprintf(logFile, "bp4: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
-				fflush(logFile);
+			printf("bp3: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fprintf(logFile, "bp3: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fflush(logFile);
+
+			info->ContextRecord->EFlags |= ResumeFlag;
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
+		else if (info->ContextRecord->Dr6 & 0x8)
+		{
+
+			if (info->ContextRecord->Rax != 0x0018)
+			{
+				//printf("syscall %llx\n", info->ContextRecord->Rax);
+
+				info->ContextRecord->Rip = (uint64_t)ntdllAsmStubLocation;
+				info->ContextRecord->EFlags |= ResumeFlag;
+				return EXCEPTION_CONTINUE_EXECUTION;
 			}
 
 			info->ContextRecord->EFlags |= ResumeFlag;

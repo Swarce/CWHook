@@ -28,11 +28,10 @@
 int mainThreadId = 0;
 char* baseFuncAddr = nullptr;
 
-extern HMODULE module;
-
 int main()
 {
 	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
+
 	exceptionHandle = AddVectoredExceptionHandler(true, exceptionHandler);
 
 	auto* const peb = reinterpret_cast<PPEB>(__readgsqword(0x60));
@@ -43,28 +42,20 @@ int main()
 	freopen("CONIN$", "r", stdin);
 	freopen("CONOUT$", "w", stdout);
 	freopen("CONOUT$", "w", stderr);
+
+	printf("address %llx\n", baseAddr);
 	//inputHandle = CreateThread(nullptr, 0, ConsoleInput, module, 0, &inputThreadId);
 	//printf("inputThreadId: %llx\n", inputThreadId);
 
 	RestoreNtdllDbgFunctions();
 	MH_Initialize();
+
 	InitializeSystemHooks();
 
 	logFile = fopen("log.txt", "w+");
 
-	// checksum fixing bp
-	char* bpAddr2 = reinterpret_cast<char*>(baseAddr + 0x7FF641E3CD6E - StartOfBinary);
-	placeHardwareBP(bpAddr2, 2, Condition::Execute);
-
-	// arxan self healing changes back this hook
-	//char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7FF6413597B5 - StartOfBinary);
-	char* bpAddr1 = reinterpret_cast<char*>(baseAddr + 0x7ff6418ca8f5 - StartOfBinary);
-	placeHardwareBP(bpAddr1, 3, Condition::Write);
-
-	//char* bpAddr4 = reinterpret_cast<char*>(baseAddr + 0x7FF641E3CD6E - StartOfBinary);
-	//placeHardwareBP(bpAddr4, 1, Condition::Execute);
-
-	setGameVariables();
+	char* NtQueryInformationThreadAddr = (char*)GetProcAddress(GetModuleHandle("ntdll.dll"), "NtAllocateVirtualMemory");
+	placeHardwareBP(NtQueryInformationThreadAddr + 0x12, 3, Condition::Execute);
 
 	// disable audio being turned on
 	DWORD dwVolume;

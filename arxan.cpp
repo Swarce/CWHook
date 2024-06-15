@@ -37,8 +37,18 @@ std::vector<intactChecksumHook> intactchecksumHooks;
 std::vector<intactBigChecksumHook> intactBigchecksumHooks;
 std::vector<splitChecksumHook> splitchecksumHooks;
 
+LPVOID ntdllAsmStubLocation;
+
 inlineAsmStub* inlineStubs = nullptr;
 size_t stubCounter = 0;
+
+void fixInlineSyscallAntiDebug()
+{
+	hook::pattern checksumFixers = hook::module_pattern(GetModuleHandle(nullptr), "81 ? 4C 8B D1 B8 E9");
+	size_t checksumFixersCount = checksumFixers.size();
+
+	printf("checksumFixer %d\n", checksumFixersCount);
+}
 
 int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
 {
@@ -288,17 +298,557 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	return originalChecksum;
 }
 
+
+NTSTATUS ntdllSyscallSetInformation(HANDLE handle, THREADINFOCLASS ThreadInformationClass, PVOID ThreadInformation, ULONG ThreadInformationLength)
+{
+	DWORD flags;
+	if (ThreadInformation == 0 && ThreadInformationLength == 0 && (GetHandleInformation(handle, &flags) != 0))
+	{
+		return 0;
+	}
+	else
+		return 0xc0000008;
+}
+
+NTSTATUS ntdllSyscallQueryInformation(HANDLE handle, THREADINFOCLASS ThreadInformationClass, PVOID ThreadInformation, ULONG ThreadInformationLength)
+{
+	if (weAreDebugging)
+		return 0x1337;
+
+	DWORD flags;
+	if (ThreadInformationLength == sizeof(BOOLEAN) && (GetHandleInformation(handle, &flags) != 0))
+	{
+		char* info = (char*)ThreadInformation;
+		*info = 1;
+		return 0;
+	}
+	else
+		return 0x80000002;
+}
+
+NTSTATUS ntdllSyscallCreateThreadEx(PHANDLE ThreadHandle, NTSTATUS syscallResult)
+{
+	NTSTATUS setThreadResult = SetThreadContextOrig(*(PHANDLE*)ThreadHandle, &context);
+
+	return syscallResult;
+}
+
+void ntdllSyscallCreateThread()
+{
+	// TODO: if this gets called we would need to do setthreadcontext
+	printf("thread created inside\n");
+}
+
+void ntdllQueryInformationProcess(PROCESSINFOCLASS ProcessInformationClass, PVOID ProcessInformation)
+{
+	switch(ProcessInformationClass)
+	{
+		// TODO: we aren't setting ntstatus to 0xC0000353 if debugobjecthandle is true
+		case ProcessDebugObjectHandle:
+		case ProcessDebugPort:
+			memset(ProcessInformation, 0x0, sizeof(uint8_t) * 8);
+			break;
+		case ProcessImageFileName:
+		case ProcessImageFileNameWin32:
+			if (ProcessInformation != nullptr)
+				remove_evil_keywords_from_string(*static_cast<UNICODE_STRING*>(ProcessInformation));
+			break;
+		case ProcessDebugFlags:
+			memset(ProcessInformation, 1, sizeof(uint64_t));
+			break;
+		default:
+			break;
+	}
+}
+
+void ntdllQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation)
+{
+	switch(SystemInformationClass)
+	{
+		// TODO: we aren't setting ntstatus to 0xC0000353 if debugobjecthandle is true
+		case SystemProcessInformation:
+		case SystemSessionProcessInformation:
+		case SystemExtendedProcessInformation:
+		case SystemFullProcessInformation:
+			uint8_t* addr;
+			addr = (uint8_t*)(SystemInformation);
+
+			SYSTEM_PROCESS_INFORMATION* previousInfo;
+
+			while (true)
+			{
+				SYSTEM_PROCESS_INFORMATION* info;
+				info = (SYSTEM_PROCESS_INFORMATION*)addr;
+
+				if (info->ImageName.Buffer != nullptr)
+					if (remove_evil_keywords_from_string(info->ImageName))
+						previousInfo->NextEntryOffset += info->NextEntryOffset;
+
+				previousInfo = (SYSTEM_PROCESS_INFORMATION*)addr;
+
+				if (!info->NextEntryOffset)
+					return;
+
+				addr = addr + info->NextEntryOffset;
+			}
+			break;
+		case SystemHandleInformation:
+		case SystemExtendedHandleInformation:
+			printf("\nchecked for handle information\n");
+			break;
+		default:
+			break;
+	}
+}
+
+char *strstr1(const wchar_t *str, const wchar_t* substring)
+{
+    const wchar_t *a;
+    const wchar_t*b;
+
+    b = substring;
+
+    if (*b == 0) {
+        return (char *) str;
+    }
+
+    for ( ; *str != 0; str += 1) {
+        if (*str != *b) {
+            continue;
+        }
+
+        a = str;
+        while (1) {
+            if (*b == 0) {
+                return (char *) str;
+            }
+            if (*a++ != *b++) {
+                break;
+            }
+        }
+        b = substring;
+    }
+
+    return NULL;
+}
+
+void checkIfWIN32UGetsCalled()
+{
+	printf("got called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+	SuspendAllThreads();
+	__debugbreak();
+}
+
+OBJECT_ATTRIBUTES objAttributes = {};
+UNICODE_STRING unicodeString;
+
+void ManualHookCallFunction(uint64_t functionAddress, uint64_t setInfoOffset)
+{
+	unsigned char instructionBuffer[8] = {};
+	unsigned char jmpBuffer[14] = {};
+
+	memset(instructionBuffer, 0, sizeof(char) * 8);
+	memset(jmpBuffer, 0, sizeof(char) * 14);
+
+	// reverse function address bytes
+	for (int i = 0; i < 8; i++)
+		instructionBuffer[i] = (functionAddress >> i * 8) & 0xFF;
+
+	// absolute (far) jump instruction
+	jmpBuffer[0] = 0xFF;
+	jmpBuffer[1] = 0x25; // 0x15 far call
+
+	// insert function address bytes
+	for (int i = 0; i <= 8; i++)
+		jmpBuffer[14 - i] = instructionBuffer[8 - i];
+
+	memcpy((char*)setInfoOffset, jmpBuffer, sizeof(unsigned char) * 14);
+}
+
+NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
+	ACCESS_MASK DesiredAccess,
+	POBJECT_ATTRIBUTES ObjectAttributes,
+	PIO_STATUS_BLOCK IoStatusBlock,
+	PLARGE_INTEGER AllocationSize,
+	ULONG FileAttributes,
+	ULONG ShareAccess,
+	ULONG CreateDisposition,
+	ULONG CreateOptions,
+	PVOID EaBuffer,
+	ULONG EaLength)
+{
+	wchar_t* fileName = ObjectAttributes->ObjectName->Buffer;
+
+	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\GDI32.dll") == 0)
+	{
+		RtlInitUnicodeString(&unicodeString, L"\\??\\D:\\games\\BOCW\\win32u.dll");
+		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
+		ObjectAttributes = &objAttributes;
+		return 0x1337;
+	}
+
+	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\USER32.dll") == 0)
+	{
+		RtlInitUnicodeString(&unicodeString, L"\\??\\D:\\games\\BOCW\\win32u.dll");
+		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
+		ObjectAttributes = &objAttributes;
+		return 0x1337;
+	}
+
+	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\win32u.dll") == 0)
+	{
+		RtlInitUnicodeString(&unicodeString, L"\\??\\D:\\games\\BOCW\\win32u.dll");
+		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
+		ObjectAttributes = &objAttributes;
+		return 0x1337;
+	}
+
+	return 0x0;
+}
+
+void ntdllAsmStub()
+{
+	hook::pattern syscallLocations = hook::module_pattern(GetModuleHandle("ntdll.dll"), "4C 8B D1 ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 0F 05");
+	size_t syscallCount = syscallLocations.size();
+
+	printf("ntdll syscallCount %d\n", syscallCount);
+
+	// allocate asm stub rwx page
+	const size_t allocationSize = sizeof(uint8_t) * 128;
+	ntdllAsmStubLocation = allocate_somewhere_near(GetModuleHandle("ntdll.dll"), allocationSize);
+	memset(ntdllAsmStubLocation, 0x90, allocationSize);
+	printf("ntdlll stub location %llx\n", ntdllAsmStubLocation);
+
+	// assembly stub
+	static asmjit::JitRuntime runtime;
+	asmjit::CodeHolder code;
+	code.init(runtime.environment());
+
+	using namespace asmjit::x86;
+	Assembler a(&code);
+
+	asmjit::Label L1 = a.newLabel();
+	asmjit::Label SetInformation = a.newLabel();
+	asmjit::Label QueryInformation = a.newLabel();
+	asmjit::Label CreateThreadEx = a.newLabel();
+	asmjit::Label CreateThread = a.newLabel();
+	asmjit::Label RegularSyscall = a.newLabel();
+	asmjit::Label QueryInformationProcess = a.newLabel();
+	asmjit::Label QueryInformationProcess_L1 = a.newLabel();
+	asmjit::Label QuerySystemInformation = a.newLabel();
+	asmjit::Label QuerySystemInformation_L1 = a.newLabel();
+	asmjit::Label QuerySystemInformation_L2 = a.newLabel();
+	asmjit::Label CreateFile = a.newLabel();
+	asmjit::Label CreateFile_L1 = a.newLabel();
+	asmjit::Label DEBUG = a.newLabel();
+
+	a.test(byte_ptr(0x7FFE0308), 1);
+	a.jnz(L1);
+
+	a.cmp(rax, 0xd);
+	a.je(SetInformation);
+	a.cmp(rax, 0x4e);
+	a.je(CreateThread);
+	a.cmp(rax, 0x25);
+	a.je(QueryInformation);
+	a.cmp(rax, 0xc1);
+	a.je(CreateThreadEx);
+
+	a.cmp(rax, 0x19);	// NtQueryInformationProcessAddr
+	a.je(QueryInformationProcess);
+	a.cmp(rax, 0x36);	// NtQuerySystemInformationAddr
+	a.je(QuerySystemInformation);
+
+	a.cmp(rax, 0x55);
+	a.je(CreateFile);
+
+	a.cmp(rax, 0xf7);
+	a.je(DEBUG);
+
+	a.bind(RegularSyscall);
+		a.syscall();
+		a.ret();
+
+	a.bind(L1);
+		a.int_(0x2E);
+		a.ret();
+
+#if 1
+	a.bind(DEBUG);
+	a.int3();
+	a.jmp(DEBUG);
+#endif
+
+	a.bind(CreateFile);
+		pushad64();
+
+		a.sub(rsp, 0x20 + 0x30 + 0x8);
+
+		// shift the entire content of the stack to our func call
+		for(int i=0; i <= 6; i++)
+		{
+			a.mov(rax, qword_ptr(rsp, 0xF8 + 0x8 + (0x8 * i))); 
+			a.mov(qword_ptr(rsp, 0x20 + (0x8 * i)), rax);
+		}
+
+		a.mov(r15, (uint64_t)(void*)ntdllCreateFile);
+		a.call(r15);
+
+		a.cmp(rax, 0x1337);
+		a.jne(CreateFile_L1);
+
+		// we modified the objectattributes (r8) register, store it in xmm register
+		a.movq(xmm15, qword_ptr(rsp, 0x10)); 
+
+	a.bind(CreateFile_L1);
+		a.add(rsp, 0x20 + 0x30 + 0x8);
+
+		popad64();
+
+		// compare if xmm register is 0 if not we swap xmm register with r8
+		a.push(rax);
+		a.movq(rax, xmm15);
+		a.cmp(rax, 0);
+		a.pop(rax);
+		a.je(RegularSyscall);
+
+		a.movq(xmm14, r8); // backup original objectattribute address
+		a.movq(r8, xmm15); // swap objectattribute with our own
+
+		a.syscall();
+
+		//a.movq(r8, xmm14);
+
+		// set xmm15 & xmm14 back to 0
+		a.push(rax);
+		a.mov(rax, 0);
+		a.movq(xmm15, rax);
+		a.movq(xmm14, rax);
+		a.pop(rax);
+
+		a.ret();
+
+	// rdi has the address location?
+	a.bind(QueryInformationProcess);
+		a.cmp(rdx, ProcessImageFileNameWin32);
+		a.je(QueryInformationProcess_L1);
+		a.cmp(rdx, ProcessImageFileName);
+		a.je(QueryInformationProcess_L1);
+		a.cmp(rdx, ProcessDebugPort);
+		a.je(QueryInformationProcess_L1);
+		a.cmp(rdx, ProcessDebugFlags);
+		a.je(QueryInformationProcess_L1);
+		a.cmp(rdx, ProcessDebugObjectHandle);
+		a.je(QueryInformationProcess_L1);
+
+		// else do regular syscall
+		a.jmp(RegularSyscall);
+
+	a.bind(QueryInformationProcess_L1);
+		a.movq(xmm14, rdx);  // ProcessInformationClass
+		a.movq(xmm15, r8); // ProcessInformation
+
+		a.syscall();
+
+		#if 0
+		a.bind(DEBUG);
+		a.int3();
+		a.jmp(DEBUG);
+		#endif
+
+		pushad64();
+
+		a.movq(rcx, xmm14);
+		a.movq(rdx, xmm15);
+
+		a.sub(rsp, 0x20);
+		a.call(ntdllQueryInformationProcess);
+		a.add(rsp, 0x20);
+
+		popad64();
+
+		a.push(rax);
+		a.mov(rax, 0);
+		a.movq(xmm14, rax);
+		a.movq(xmm15, rax);
+		a.pop(rax);
+		
+		a.ret();
+
+	a.bind(QuerySystemInformation);
+		a.cmp(rcx, SystemProcessInformation);
+		a.je(QuerySystemInformation_L1);
+		a.cmp(rcx, SystemSessionProcessInformation);
+		a.je(QuerySystemInformation_L1);
+		a.cmp(rcx, SystemExtendedProcessInformation);
+		a.je(QuerySystemInformation_L1);
+		a.cmp(rcx, SystemFullProcessInformation);
+		a.je(QuerySystemInformation_L1);
+		a.cmp(rcx, SystemHandleInformation);
+		a.je(QuerySystemInformation_L1);
+		a.cmp(rcx, SystemExtendedHandleInformation);
+		a.je(QuerySystemInformation_L1);
+		// else do regular syscall
+		a.jmp(RegularSyscall);
+
+	a.bind(QuerySystemInformation_L1);
+		a.movq(xmm14, rcx);  // ProcessInformationClass
+		a.movq(xmm15, rdx); // ProcessInformation
+
+		a.syscall();
+		// check if ntstatus is success
+		a.cmp(rax, 0x0);
+		a.je(QuerySystemInformation_L2);
+		a.ret();
+
+	a.bind(QuerySystemInformation_L2);
+		pushad64();
+
+		a.movq(rcx, xmm14);
+		a.movq(rdx, xmm15);
+
+		#if 0
+		a.bind(DEBUG);
+		a.int3();
+		a.jmp(DEBUG);
+		#endif
+
+		a.sub(rsp, 0x20);
+		a.call(ntdllQuerySystemInformation);
+		a.add(rsp, 0x20);
+
+		popad64();
+
+		a.push(rax);
+		a.mov(rax, 0);
+		a.movq(xmm14, rax);
+		a.movq(xmm15, rax);
+		a.pop(rax);
+		
+		a.ret();
+
+	a.bind(SetInformation);
+		// do regular syscall if hidefromdebugger is not set
+		a.cmp(rdx, ThreadHideFromDebugger);
+		a.jne(RegularSyscall);
+
+		a.sub(rsp, 0x20);
+		a.call(ntdllSyscallSetInformation);
+		a.add(rsp, 0x20);
+		a.ret();
+
+	a.bind(QueryInformation);
+		// do regular syscall if hidefromdebugger is not set
+		a.cmp(rdx, ThreadHideFromDebugger);
+		a.jne(RegularSyscall);
+
+		a.sub(rsp, 0x20);
+		a.call(ntdllSyscallQueryInformation);
+		a.add(rsp, 0x20);
+		// if we call the function ourselves
+		a.cmp(rax, 0x1337);
+		a.je(RegularSyscall);
+		a.ret();
+
+	a.bind(CreateThreadEx);
+		// remove hide from debugger flag
+		a.movzx(eax, dword_ptr(rsp, 0x38));
+		a.mov(r15, rax);
+		a.mov(rax, THREAD_CREATE_FLAGS_HIDE_FROM_DEBUGGER);
+		a.not_(rax);
+		a.and_(r15, rax);
+		a.mov(rax, r15);
+		a.mov(dword_ptr(rsp, 0x38), eax);
+
+		// create thread with syscall
+		a.mov(rax, 0xc1);
+		a.mov(r15, rcx);
+		a.syscall();
+		a.mov(rdx, rax);
+		a.mov(rcx, r15);
+
+		// set hwbp's on newly created thread
+		a.sub(rsp, 0x20);
+		a.call(ntdllSyscallCreateThreadEx);
+		a.add(rsp, 0x20);
+		a.ret();
+
+	a.bind(CreateThread);
+		a.sub(rsp, 0x20);
+		a.call(ntdllSyscallCreateThread);
+		a.add(rsp, 0x20);
+		a.syscall();
+		a.ret();
+
+	void* asmjitResult = nullptr;
+	runtime.add(&asmjitResult, &code);
+
+	// copy over the content to the stub
+	uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+	memcpy(tempBuffer, asmjitResult, code.codeSize());
+	memcpy(ntdllAsmStubLocation, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+	DWORD old_protect{};
+	VirtualProtect(ntdllAsmStubLocation, allocationSize, PAGE_EXECUTE, &old_protect);
+
+	//char* functionAddress = (char*)syscallLocations.get(0).get<void*>(0) + 18;
+	//const int callInstructionBytes = 0x100000;
+	//const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+	//DWORD old_protect{};
+	//BOOL result = VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+
+	// inline hook every function using syscall
+	//for (int i=0; i < syscallCount; i++)
+	for (int i=0; i < syscallCount-5; i++)
+	{
+		// 18 since the signature puts us at the start of the function
+		char* functionAddress = (char*)syscallLocations.get(i).get<void*>(0) + 18;
+		uint64_t jmpDistance = (uint64_t)ntdllAsmStubLocation - (uint64_t)functionAddress - 5;
+
+		const int callInstructionBytes = 6;
+		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		uint8_t* jmpInstructionBuffer = (uint8_t*)malloc(sizeof(uint8_t) * callInstructionBytes);
+
+		if (jmpInstructionBuffer != nullptr)
+		{
+			jmpInstructionBuffer[0] = 0xE9;
+			jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+			jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+			jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+			jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+			jmpInstructionBuffer[5] = 0x90;
+		}
+
+		DWORD old_protect{};
+		int c = VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+
+		if (c != 0)
+			memcpy(functionAddress, jmpInstructionBuffer, callInstructionLength);
+		else
+			printf("couldnt change page protection at %llx\n", functionAddress);
+		
+		//int d = VirtualProtect(functionAddress, callInstructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
+	}
+
+	//printf("done\n");
+}
+
 void createInlineAsmStub()
 {
 	hook::pattern locationsIntact = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 45 ? FF");
 	hook::pattern locationsIntactBig = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 85");
 	hook::pattern locationsSplit = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A E9");
+
+	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
+
 	size_t intactCount = locationsIntact.size();
 	size_t intactBigCount = locationsIntactBig.size();
 	size_t splitCount = locationsSplit.size();
 	size_t totalCount = intactCount + intactBigCount + splitCount;
-
-	printf("splitCount %d\n", splitCount);
 
 	const size_t allocationSize = sizeof(uint8_t) * 128;
 	inlineStubs = (inlineAsmStub*)malloc(sizeof(inlineAsmStub) * totalCount);
@@ -327,13 +877,36 @@ void createInlineAsmStub()
 		stubCounter++;
 	}
 
+	LPVOID asmBigStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize * 0x80);
+	memset(asmBigStubLocation, 0x90, allocationSize * 0x80);
+
+	// avoid stub generation collision
+	char* previousStubOffset = nullptr;
+	// for jmp distance calculation
+	char* currentStubOffset = nullptr;
+
+	// TODO: refactor all stub generators to use one big allocationsize to reduce startup time
+	// remember the offset of the previous asm stub's end so we don't collide into multiple stubs
+	// remember the offset of the current stub we are inserting for the jmpdistance calculation
+
+	// TODO: once we are done with that merge all the checksum fix stub generators into one function
+	// make that also use one big allocated memory page
+
+	// TODO: fix the asm stub that requires a movzx, registers maybe are getting owned?
+
 	for (int i=0; i < stubCounter; i++)
 	{
-		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
-		memset(asmStubLocation, 0x90, allocationSize);
+		//LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		//memset(asmStubLocation, 0x90, allocationSize);
+
+		// we don't know the previous offset yet
+		if (currentStubOffset == nullptr)
+			currentStubOffset = (char*)asmBigStubLocation;
+
 		void* functionAddress = inlineStubs[i].functionAddress;
 
-		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+		//uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+		uint64_t jmpDistance = (uint64_t)currentStubOffset - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
 
 		// backup instructions that will get destroyed
 		const int length = sizeof(uint8_t) * 8;
@@ -877,32 +1450,51 @@ void nopChecksumFixingMemcpy6()
 
 				using namespace asmjit::x86;
 				Assembler a(&code);
-
+/*
 				a.sub(rsp, 0x32);
 				pushad64_Min();
 				a.mov(rcx, rbp);
-				a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
-				a.call(r15);
+				//a.mov(r15, (uint64_t)(void*)arxanHealingChecksum);
+				//a.call(r15);
+				a.movq(xmm14, rax); // backup rax
+				a.movq(xmm15, r15);	// backup r15
+				a.call(arxanHealingChecksum);
 				a.movzx(r15, al);	// if arxan tries to replace our checksum set r15 to 1
 
 				popad64_Min();
 				a.add(rsp, 0x32);
 
 				asmjit::Label L1 = a.newLabel();
-
+*/
 				/*
 					mov     rax, [rbp+18h]
 					mov     rdx, [rbp+10h]
 					movzx   eax, byte ptr [rax]
 					mov     [rdx], al
 				*/
+/*
 				a.mov(rax, qword_ptr(rbp, 0x18));
 				a.mov(rdx, qword_ptr(rbp, 0x10));
 				a.movzx(eax, byte_ptr(rax));
 				a.cmp(r15, 1);
 				a.je(L1);
-				a.mov(qword_ptr(rdx), al);
+					a.mov(qword_ptr(rdx), al);
+					// restore r15, rax & xmm15
+					a.movq(r15, xmm15);
+					a.movq(rax, xmm14);
+					a.push(rax);
+					a.mov(rax, 0);
+					a.movq(xmm15, rax);
+					a.movq(xmm14, rax);
+					a.pop(rax);
 				a.bind(L1);
+					a.ret();
+*/
+				// TODO: fix this later, movzx makes it crash
+				a.mov(rax, qword_ptr(rbp, 0x18));
+				a.mov(rdx, qword_ptr(rbp, 0x10));
+				a.movzx(eax, byte_ptr(rax));
+				a.mov(qword_ptr(rdx), al);
 				a.ret();
 
 				void* asmjitResult = nullptr;
