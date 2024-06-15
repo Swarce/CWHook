@@ -39,6 +39,7 @@ const WCHAR* BadProcessnameList[] =
 	L"cheatengine-x86_64-SSE4-AVX2.exe",
 	L"cheatengine.exe",
 	L"ReClass.NET.exe",
+	L"ReClassEx64.exe",
 };
 
 const WCHAR* BadWindowTextList[] =
@@ -56,6 +57,12 @@ const WCHAR* BadWindowTextList[] =
 	L"Import reconstructor"
 	L"Cheat Engine",
 	L"Cheat Engine 7.3",
+	L"Cheat Engine 7.5",
+	L"ReClass",
+	L"ReClass.NET",
+	L"Process Informations",
+	L".NET-BroadcastEventWindow",
+	L"BroadcastEventWindow",
 };
 
 const WCHAR* BadWindowClassList[] =
@@ -69,7 +76,11 @@ const WCHAR* BadWindowClassList[] =
 	L"idawindow",
 	L"tnavbox",
 	L"idaview",
-	L"tgrzoom"
+	L"tgrzoom",
+	L"ReClass",
+	L"SysTreeView32",
+	L".NET-BroadcastEventWindow",
+	L"tooltips_class32",
 };
 
 FILE* logFile;
@@ -80,6 +91,8 @@ void FilterHwndList(HWND* phwndFirst, PULONG pcHwndNeeded)
 	{
 		if (phwndFirst[i] != nullptr && IsWindowBad(phwndFirst[i]))
 		{
+			// TODO: do enumwindows ourselves or whatever its called and check if we are filtering properly
+
 			if (i == 0)
 			{
 				// Find the first HWND that belongs to a different process (i + 1, i + 2... may still be ours)
