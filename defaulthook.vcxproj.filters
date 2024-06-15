@@ -255,6 +255,9 @@
     <ClCompile Include="gamehooks.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="instrumentationCallbacks.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="main.h">
@@ -591,6 +594,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="gamehooks.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="instrumentationCallbacks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

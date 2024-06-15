@@ -22,6 +22,8 @@
 #include "systemhooks.h"
 #include "exceptions.h"
 #include "gamehooks.h"
+#include "arxan.h"
+#include "instrumentationCallbacks.h"
 
 int mainThreadId = 0;
 char* baseFuncAddr = nullptr;
@@ -91,5 +93,11 @@ int main()
 	}
 
 	mainThreadId = GetCurrentThreadId();
+
+	ntdllAsmStub();
+
+	// crashes the game after a while, only good if you want to know what syscalls get called from win32u
+	// initInstrumentation();
+	
 	return 0;
 }

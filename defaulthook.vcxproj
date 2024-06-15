@@ -192,6 +192,7 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="exceptions.cpp" />
     <ClCompile Include="gamehooks.cpp" />
+    <ClCompile Include="instrumentationCallbacks.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64assembler.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64builder.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64compiler.cpp" />
@@ -271,6 +272,7 @@
     <ClInclude Include="gamehooks.h" />
     <ClInclude Include="gamestructs.h" />
     <ClInclude Include="gdll.h" />
+    <ClInclude Include="instrumentationCallbacks.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\a64.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\arm.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\arm\a64archtraits_p.h" />
