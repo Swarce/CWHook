@@ -1,4 +1,4 @@
-cd "E:\SteamLibrary\steamapps\common\BOCW"
-E:
+cd "D:\games\BOCW"
+D:
 start BlackOpsColdWar.exe
 exit

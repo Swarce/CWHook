@@ -30,9 +30,9 @@ const extern WCHAR* BadProcessnameList[];
 const extern WCHAR* BadWindowTextList[];
 const extern WCHAR* BadWindowClassList[];
 
-const uint64_t EndOfTextSection = 0xbb3a000;
-const uint64_t StartOfTextSection = 0x7FF626C71000;
-const uint64_t StartOfBinary = 0x7FF626C70000;
+const uint64_t EndOfTextSection = 0xd75c000;
+const uint64_t StartOfTextSection = 0x7FF71AA91000;
+const uint64_t StartOfBinary = 0x7FF71AA90000;
 
 extern FILE* logFile;
 

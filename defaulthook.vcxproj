@@ -72,11 +72,11 @@
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>E:\SteamLibrary\steamapps\common\BOCW</OutDir>
+    <OutDir>D:\games\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>E:\SteamLibrary\steamapps\common\BOCW</OutDir>
+    <OutDir>D:\games\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
