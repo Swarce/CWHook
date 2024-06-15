@@ -73,6 +73,7 @@ bool IsWindowClassNameBad(PUNICODE_STRING className);
 bool IsWindowNameBad(PUNICODE_STRING windowName);
 bool IsWindowBad(HWND hWnd);
 void FilterHwndList(HWND* phwndFirst, PULONG pcHwndNeeded);
+std::string GetLastErrorAsString();
 
 inline void SetBits(unsigned long& dw, int lowBit, int bits, int newValue)
 {
