@@ -228,9 +228,47 @@ void basic_pattern_impl::EnsureMatches(uint32_t maxCount)
 		}
 	}
 
-	__try
+	/*
+		MEMORY_BASIC_INFORMATION64 page_information = {};
+		for (unsigned char* current_page = module_start; current_page < module_end; current_page = page_information.BaseAddress + page_information.RegionSize)
+		{
+			VirtualQuery(current_page, &page_information, sizeof(MEMORY_BASIC_INFORMATION));
+			if (page_information.Protect == PAGE_NOACCESS)
+				continue;
+
+			if (page_information.State != MEM_COMMIT)
+				continue;
+
+			if (page_information.Protect & PAGE_GUARD)
+				continue;
+		}
+	*/
+
+	// early
+	// m_begin 0x00007ff7b2930000
+	// m_end 0x00007ff7d19e1c00
+	// 0x000000001f0b1c00
+
+	// TODO: add x86/x64 check
+	MEMORY_BASIC_INFORMATION64 page_information = {};
+	
+	// modified the EnsureMatches function so we dont get owned by pages that are invalid since we will cross these by pattern searching after arxan decided to split up multiple memory page regions into MEM_RESERVE
+	for (unsigned char* current_page = (unsigned char*)executable.begin(); 
+	current_page < (unsigned char*)executable.end(); 
+	current_page = (unsigned char*)(page_information.BaseAddress + page_information.RegionSize))
 	{
-		for (uintptr_t i = executable.begin(), end = executable.end() - maskSize; i <= end;)
+		VirtualQuery(current_page, (PMEMORY_BASIC_INFORMATION)(&page_information), sizeof(MEMORY_BASIC_INFORMATION));
+		
+		if (page_information.Protect == PAGE_NOACCESS)
+			continue;
+
+		if (page_information.State != MEM_COMMIT)
+			continue;
+
+		if (page_information.Protect & PAGE_GUARD)
+			continue;
+
+		for (uintptr_t i = (uintptr_t)current_page, end = (uintptr_t)(current_page + page_information.RegionSize) - maskSize; i <= end;)
 		{
 			uint8_t* ptr = reinterpret_cast<uint8_t*>(i);
 			ptrdiff_t j = maskSize - 1;
@@ -249,9 +287,6 @@ void basic_pattern_impl::EnsureMatches(uint32_t maxCount)
 			}
 			else i += std::max(ptrdiff_t(1), j - Last[ptr[j]]);
 		}
-	}
-	__except ((GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION) ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
-	{
 	}
 
 	m_matched = true;
