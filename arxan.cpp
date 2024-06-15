@@ -877,13 +877,13 @@ void createInlineAsmStub()
 		stubCounter++;
 	}
 
-	LPVOID asmBigStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize * 0x80);
-	memset(asmBigStubLocation, 0x90, allocationSize * 0x80);
+	//LPVOID asmBigStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize * 0x80);
+	//memset(asmBigStubLocation, 0x90, allocationSize * 0x80);
 
 	// avoid stub generation collision
-	char* previousStubOffset = nullptr;
+	//char* previousStubOffset = nullptr;
 	// for jmp distance calculation
-	char* currentStubOffset = nullptr;
+	//char* currentStubOffset = nullptr;
 
 	// TODO: refactor all stub generators to use one big allocationsize to reduce startup time
 	// remember the offset of the previous asm stub's end so we don't collide into multiple stubs
@@ -896,17 +896,17 @@ void createInlineAsmStub()
 
 	for (int i=0; i < stubCounter; i++)
 	{
-		//LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
-		//memset(asmStubLocation, 0x90, allocationSize);
+		LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+		memset(asmStubLocation, 0x90, allocationSize);
 
 		// we don't know the previous offset yet
-		if (currentStubOffset == nullptr)
-			currentStubOffset = (char*)asmBigStubLocation;
+		//if (currentStubOffset == nullptr)
+		//	currentStubOffset = (char*)asmBigStubLocation;
 
 		void* functionAddress = inlineStubs[i].functionAddress;
 
-		//uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
-		uint64_t jmpDistance = (uint64_t)currentStubOffset - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+		uint64_t jmpDistance = (uint64_t)asmStubLocation - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
+		//uint64_t jmpDistance = (uint64_t)currentStubOffset - (uint64_t)functionAddress - 5; // 5 bytes from relative call instruction
 
 		// backup instructions that will get destroyed
 		const int length = sizeof(uint8_t) * 8;
