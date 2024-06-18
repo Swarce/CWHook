@@ -146,10 +146,6 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 	{
 		static int counter = 0;
 		counter++;
-		//printf("ntdll counter %d\n", counter);
-
-		//if (counter == 1)
-		//	placeHardwareBP((char*)((uint64_t)GetModuleHandle(nullptr) + 0x1b5654f8), 0, Condition::Execute);
 
 		/*
 			p 57
@@ -158,40 +154,15 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 		*/
 
 		static bool firstTime = true;
-		//if (firstTime && counter == 4)
-		if (firstTime)
+		if (firstTime) // if (firstTime && counter == 4)
 		{
-
-			// try moving our hook after bp1: 7ff637c3b429 7ff738f1b429 1 ??????
-			// bp1: 7ff637c3b429 7ff738f1b429 1
-			// bp1: 7ff637c3b429 7ff738f1b429 1
-
-			//SuspendAllThreads();
-			//__debugbreak();
-
-			// TODO: allocating close to the module/process takes a ton of time, we could make this faster by allocating one huge page and then fix all the stubs in there, same goes with the checksum fixer stubs
-			// later on we can even create an array with the address locations where we have to do inline hooks at
-			
-			// TODO: replace our pattern function with the one from the boiii / cold war dll since we are getting owned by MEM_RESERVE pages
-
 			clock_t start_time = clock();
+			// TODO: enable this later
 			createInlineAsmStub();
-			nopChecksumFixingMemcpy();
-			nopChecksumFixingMemcpy2();
-			nopChecksumFixingMemcpy3();
-			nopChecksumFixingMemcpy4();
-			nopChecksumFixingMemcpy5();
-
-			// crashes the game with movzx change, but are necessary to work and reduce the chances of crashes happening from checksum checks
-			//nopChecksumFixingMemcpy6(); 
-
-			nopChecksumFixingMemcpy7();
-			nopChecksumFixingMemcpy8();
-			nopChecksumFixingMemcpy9();
+			createChecksumHealingStub();
+			
 			double elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
 			printf("creating inline hooks for checksums took: %f seconds\n", elapsed_time);
-
-			// TODO: checksum late hooking
 			printf("done hooking\n");
 			
 			firstTime = false;
