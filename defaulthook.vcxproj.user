@@ -9,11 +9,11 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommand>D:\games\BOCW\BlackOpsColdWar.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>E:\games\BOCWLatest\BlackOpsColdWar.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommand>D:\games\BOCW\BlackOpsColdWar.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>E:\games\BOCWLatest\BlackOpsColdWar.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
