@@ -1106,7 +1106,12 @@ bool arxanHealingChecksum(uint64_t rbp)
 
 	for (int i=0; i < stubCounter; i++)
 	{
-		if (rbpAddressLocationPtr+0x8 >= (uint64_t)inlineStubs[i].functionAddress && rbpAddressLocationPtr-0x8 <= (uint64_t)inlineStubs[i].functionAddress)
+		// 0x8
+		// TODO: if 0x7 is too big then "mov [rdx], al" will make the game crash probably because its trying to overwrite areas next to our hooks that have to get modified.
+		// we could do two seperate functions since "mov [rdx], eax" would be a 32 byte offset (?) and "mov [rdx], al" would be 4 byte offset (?)
+
+		if (rbpAddressLocationPtr+0x7 >= (uint64_t)inlineStubs[i].functionAddress && 
+			rbpAddressLocationPtr-0x7 <= (uint64_t)inlineStubs[i].functionAddress)
 		{
 			//printf("checksum fixer is trying to fix our inline function: %llx\n", (uint64_t)inlineStubs[i].functionAddress);
 			
@@ -1120,6 +1125,13 @@ bool arxanHealingChecksum(uint64_t rbp)
 	return false;
 }
 
+void printWeirdRaxAL()
+{
+	static int counter = 0;
+	counter++;
+	printf("got called %d\n", counter);
+}
+
 struct checksumHealingLocation
 {
 	hook::pattern checksumPattern;
@@ -1128,47 +1140,13 @@ struct checksumHealingLocation
 
 void createChecksumHealingStub()
 {
-	/*
-		89 02 8B 45 20 83 C0 FC E9 						8
-		48 8B 45 18 48 8B 55 10 8B 00 89 02 E9 			12
-		48 8B 45 18 48 8B 55 10 8B 00 89 02 			12
-		48 8B 45 18 48 8B 55 10 0F B6 00 88 02 			13
-		48 8B 45 18 48 8B 55 10 8B 00 E9 				10
-		48 8B 45 18 48 8B 55 10 0F B6 00 E9 			11
-		8B 00 89 02 E9 									9
-		0F B6 00 88 02 E9 								9
-		48 8B 55 10 0F B6 00 88 02 						9
-	*/
-
 	void* baseModule = GetModuleHandle(nullptr);
 
 	checksumHealingLocation healingLocations[] {
-		// nopChecksumFixingMemcpy
-		{hook::module_pattern(baseModule, "89 02 8B 45 20 83 C0 FC E9"), 8},
-
-		// nopChecksumFixingMemcpy2
-		{hook::module_pattern(baseModule, "48 8B 45 18 48 8B 55 10 8B 00 89 02 E9"), 12},
-
-		// nopChecksumFixingMemcpy3
-		{hook::module_pattern(baseModule, "48 8B 45 18 48 8B 55 10 8B 00 89 02"), 12},
-
-		// nopChecksumFixingMemcpy4
-		{hook::module_pattern(baseModule, "48 8B 45 18 48 8B 55 10 0F B6 00 88 02"), 13},
-
-		// nopChecksumFixingMemcpy5
-		{hook::module_pattern(baseModule, "48 8B 45 18 48 8B 55 10 8B 00 E9"), 10},
-
-		// nopChecksumFixingMemcpy6
-		{hook::module_pattern(baseModule, "48 8B 45 18 48 8B 55 10 0F B6 00 E9"), 11},
-
-		// nopChecksumFixingMemcpy7
-		{hook::module_pattern(baseModule, "8B 00 89 02 E9"), 9},
-
-		// nopChecksumFixingMemcpy8
-		{hook::module_pattern(baseModule, "0F B6 00 88 02 E9"), 10},
-
-		// nopChecksumFixingMemcpy9
-		{hook::module_pattern(baseModule, "48 8B 55 10 0F B6 00 88 02"), 9},
+		{hook::module_pattern(baseModule, "89 02 8B 45 20"), 5},
+		{hook::module_pattern(baseModule, "88 02 83 45 20 FF"), 6},
+		{hook::module_pattern(baseModule, "89 02 E9"), 7},
+		{hook::module_pattern(baseModule, "88 02 E9"), 7},
 	};
 
 	//const size_t allocationSize = sizeof(uint8_t) * 0x100;
@@ -1188,9 +1166,10 @@ void createChecksumHealingStub()
 		size_t locations = healingLocations[type].checksumPattern.size();
 		for (int i=0; i < locations; i++)
 		{
-			int32_t jumpDistance;
+			uint8_t instructionBuffer[4] = {}; // 88 02 E9: 4          
+			int32_t jumpDistance = 0;
+			size_t callInstructionOffset = 5; // 0xE8 ? ? ? ?
 			uint64_t jumpInstruction;
-			size_t callInstructionOffset;
 			uint64_t locationToJump;
 
 			// we don't know the previous offset yet
@@ -1202,6 +1181,40 @@ void createChecksumHealingStub()
 
 			void* functionAddress = healingLocations[type].checksumPattern.get(i).get<void*>(0);
 
+			// TODO: check if e8 is at the end of the instruction or else we will be memcpying a pointer that doesnt point to anything valid
+			if (*(uint8_t*)((uint8_t*)functionAddress + 2) == 0xe9)
+			{
+				memcpy(&jumpDistance, (char*)functionAddress+3, 4); // ptr after 0xE9
+				jumpInstruction = (uint64_t)functionAddress+2; 		// at the jmp instruction
+				locationToJump = jumpInstruction + jumpDistance + callInstructionOffset;
+				
+				// get size of image from codcw
+				uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
+				IMAGE_DOS_HEADER* pDOSHeader = (IMAGE_DOS_HEADER*)GetModuleHandle(nullptr);
+				IMAGE_NT_HEADERS* pNTHeaders = (IMAGE_NT_HEADERS*)((BYTE*)pDOSHeader + pDOSHeader->e_lfanew);
+				auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
+				uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
+
+				if ((locationToJump > baseAddressStart && locationToJump < baseAddressEnd) != true)
+					continue;
+
+				memcpy(instructionBuffer, (char*)locationToJump, sizeof(uint8_t) * 4);
+
+				if (type == 2)
+				{
+					uint8_t instruction[3] = { 0x8B, 0x45, 0x20 };
+					if (memcmp(instructionBuffer, instruction, sizeof(uint8_t) * 3) != 0)
+						continue;
+				}
+
+				if (type == 3)
+				{
+					uint8_t instruction[4] = { 0x83, 0x45, 0x20, 0xFF };
+					if (memcmp(instructionBuffer, instruction, sizeof(uint8_t) * 4) != 0)
+						continue;
+				}
+			}
+
 			static asmjit::JitRuntime runtime;
 			asmjit::CodeHolder code;
 			code.init(runtime.environment());
@@ -1209,7 +1222,9 @@ void createChecksumHealingStub()
 			using namespace asmjit::x86;
 			Assembler a(&code);
 			asmjit::Label L1 = a.newLabel();
+			asmjit::Label DEBUG = a.newLabel();
 
+			// TODO: we might have to use xmm15 register instead of r15, risk that arxan uses is and we fuck up the registers
 			a.sub(rsp, 0x32);
 			pushad64_Min();
 
@@ -1225,164 +1240,62 @@ void createChecksumHealingStub()
 			{
 				case 0:
 				/*
-					mov     rax, [rbp+18h]
-					mov     rdx, [rbp+10h]
-					jmp     loc_7FF631D8DD25
 					mov     [rdx], eax
+					mov     eax, [rbp+20h]
 				*/
+					// dont replace our checksum if r15 is 1
 					a.cmp(r15, 1);
 					a.je(L1);
-					a.mov(qword_ptr(rdx), eax);	// dont replace our checksum if r15 is 1
+					a.mov(qword_ptr(rdx), eax);
+
 					a.bind(L1);
 					a.mov(eax, qword_ptr(rbp, 0x20));
-					a.add(eax, -4);
 					a.ret();
 					break;
 				case 1:
 				/*
-					mov     rax, [rbp+18h]
-					mov     rdx, [rbp+10h]
-					mov     eax, [rax]
-					mov     [rdx], eax
+					mov     [rdx], al
+					add     dword ptr [rbp+20h], -1
 				*/
-					a.mov(rax, qword_ptr(rbp, 0x18));
-					a.mov(rdx, qword_ptr(rbp, 0x10));
-					a.mov(eax, qword_ptr(rax));
+					// dont replace our checksum if r15 is 1
 					a.cmp(r15, 1);
 					a.je(L1);
-					a.mov(qword_ptr(rdx), eax);
+					a.mov(qword_ptr(rdx), al);
+
 					a.bind(L1);
+					a.add(dword_ptr(rbp, 0x20), -1);
 					a.ret();
 					break;
 				case 2:
 				/*
-					mov     rax, [rbp+18h]
-					mov     rdx, [rbp+10h]
-					mov     eax, [rax]
 					mov     [rdx], eax
+					jmp     loc_7FF7366C7B94
 				*/
-					a.mov(rax, qword_ptr(rbp, 0x18));
-					a.mov(rdx, qword_ptr(rbp, 0x10));
-					a.mov(eax, qword_ptr(rax));
+					// dont replace our checksum if r15 is 1
 					a.cmp(r15, 1);
 					a.je(L1);
 					a.mov(qword_ptr(rdx), eax);
+
 					a.bind(L1);
+					a.add(rsp, 0x8);
+					a.mov(r15, locationToJump);
+					a.push(r15);
 					a.ret();
 					break;
 				case 3:
 				/*
-					mov     rax, [rbp+18h]
-					mov     rdx, [rbp+10h]
-					mov     eax, [rax]
-					mov     [rdx], eax
-				*/
-					a.mov(rax, qword_ptr(rbp, 0x18));
-					a.mov(rdx, qword_ptr(rbp, 0x10));
-					a.movzx(eax, byte_ptr(rax));
-					a.cmp(r15, 1);
-					a.je(L1);
-					a.mov(qword_ptr(rdx), al);
-					a.bind(L1);
-					a.ret();
-					break;
-				case 4:
-				/*
-					mov     rax, [rbp+18h]
-					mov     rdx, [rbp+10h]
-					mov     eax, [rax]
-					mov     [rdx], eax
-				*/
-					a.mov(rax, qword_ptr(rbp, 0x18));
-					a.mov(rdx, qword_ptr(rbp, 0x10));
-					a.mov(eax, qword_ptr(rax));
-					a.cmp(r15, 1);
-					a.je(L1);
-					a.mov(qword_ptr(rdx), eax);
-					a.bind(L1);
-					a.ret();
-					break;
-				// TODO: case 5 we don't want to do yet cause movzx crashes atm
-				// jumpdistance could be negative too and since we use a uint64_t we might get screwed over
-				// check if the changes from regular checksum fixing int32_t would help
-
-				// jumpdistance is prob not messing us up cause we are entering our stub from those hooks, so its probably the registers or stack that we are messing up on
-				case 5:
-					jumpDistance = 0;
-					memcpy(&jumpDistance, (char*)functionAddress+12, 4); // +9 so we put ptr after 0xE9
-					jumpInstruction = (uint64_t)functionAddress+11; // +10 so we are at the jmp instruction
-					callInstructionOffset = 5;	// 0xE8 ? ? ? ?
-					locationToJump = jumpInstruction + jumpDistance + callInstructionOffset;
-				
-				/*
-					mov     rax, [rbp+18h]
-					mov     rdx, [rbp+10h]
-					movzx   eax, byte ptr [rax]
 					mov     [rdx], al
+					jmp     loc_7FF738FB7A45
 				*/
-					a.mov(rax, qword_ptr(rbp, 0x18));
-					a.mov(rdx, qword_ptr(rbp, 0x10));
-					a.movzx(eax, byte_ptr(rax));
-					a.mov(qword_ptr(rdx), al);
-					a.ret();
-
-					// "mov [rdx], al" at the jmp
-					memset((char*)locationToJump, 0x90, sizeof(char) * 2);
-					break;
-				case 6:
-					jumpDistance = 0;
-					memcpy(&jumpDistance, (char*)functionAddress+5, 4); // +9 so we put ptr after 0xE9
-					jumpInstruction = (uint64_t)functionAddress+4; // +10 so we are at the jmp instruction
-					callInstructionOffset = 5;	// 0xE8 ? ? ? ?
-					locationToJump = jumpInstruction + jumpDistance + callInstructionOffset;
-
-				/*
-					mov     eax, [rax]
-					mov     [rdx], eax
-				*/
-					a.mov(eax, qword_ptr(rax));
+					// dont replace our checksum if r15 is 1
 					a.cmp(r15, 1);
 					a.je(L1);
-					a.mov(qword_ptr(rdx), eax);
+					a.mov(qword_ptr(rdx), al);
+
 					a.bind(L1);
 					a.add(rsp, 0x8);
 					a.mov(r15, locationToJump);
 					a.push(r15);
-					a.ret();
-					break;
-				case 7:
-					jumpDistance = 0;
-					memcpy(&jumpDistance, (char*)functionAddress+6, 4); // +9 so we put ptr after 0xE9
-					jumpInstruction = (uint64_t)functionAddress+5; // +10 so we are at the jmp instruction
-					callInstructionOffset = 5;	// 0xE8 ? ? ? ?
-					locationToJump = jumpInstruction + jumpDistance + callInstructionOffset;
-
-				/*
-					movzx   eax, byte ptr [rax]
-					mov     [rdx], al
-				*/
-					a.movzx(eax, byte_ptr(rax));
-					a.cmp(r15, 1);
-					a.je(L1);
-					a.mov(qword_ptr(rdx), al);
-					a.bind(L1);
-					a.add(rsp, 0x8);
-					a.mov(r15, locationToJump);
-					a.push(r15);
-					a.ret();
-					break;
-				case 8:
-				/*
-					mov     rdx, [rbp+10h]
-					movzx   eax, byte ptr [rax]
-					mov     [rdx], al
-				*/
-					a.mov(rdx, qword_ptr(rbp, 0x10));
-					a.movzx(eax, byte_ptr(rax));
-					a.cmp(r15, 1);
-					a.je(L1);
-					a.mov(qword_ptr(rdx), al);
-					a.bind(L1);
 					a.ret();
 					break;
 				default:
