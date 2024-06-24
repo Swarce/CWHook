@@ -112,8 +112,8 @@ arxan on start up jmps to random ntdll function where syscall starts and jmps to
 
     at BlackOpsColdWar.exe+0xE426210
     saves address location from user32 and win32u functions
-    will put them on the stack then call them from BlackOpsColdWar.exe+0xC11DF3
-        probably other locations too
+    will put them on the stack then call them from  BlackOpsColdWar.exe+0xC11DF3
+                                                    BlackOpsColdWar.exe+0xB52235
 
     NtUserInternalGetWindowText
     NtUserGetWindowProcessHandle
@@ -134,12 +134,7 @@ arxan on start up jmps to random ntdll function where syscall starts and jmps to
     GetMenu
     GetMenuStringA
     GetSubMenu
-*/
 
-/*
-    use process hollowing to use reverse engineering programs by masking it with a legit program like notepad.exe etc since arxan does not do ntreadvirtualmemory on processes
-*/
-
-/*
-    check with ntdll registery open key etc syscalls if it tries to open up cheat engine tmp info
+    ZwOpenKey
+    ZwQueryValueKey
 */
