@@ -51,9 +51,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	auto sizeOfImage = pNTHeaders->OptionalHeader.SizeOfImage;
 	uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
 
-	// fix checksums here, else thread true memcpy attempt
-	// seems like its working but eventually dies because arxan at some fixes the checksums and checksums in general dont get called so much
-	// it does make the game run almost every time now
+	// check if our checksum hooks got overwritten
 	{
 		for (int i=0; i < intactchecksumHooks.size(); i++)
 		{
@@ -116,11 +114,6 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	static int fixChecksumCalls = 0;
 	fixChecksumCalls++;
 
-	//printf("rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg);
-	//printf("rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x, fixChecksumCalls %d\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg, fixChecksumCalls);
-	//fprintf(logFile, "rbp %llx, ptr %llx, stack %llx, distance %x, calculatedChecksum %x, fixChecksumCalls %d\n", rbpOffset, ptrOffset, ptrStack, jmpInstructionDistance, calculatedChecksumFromArg, fixChecksumCalls);
-	//fflush(logFile);
-
 	uint32_t calculatedChecksum = calculatedChecksumFromArg;
 	uint32_t reversedChecksum = reverse_bytes(calculatedChecksumFromArg);
 	uint32_t* calculatedChecksumPtr = (uint32_t*)((char*)ptrStack+0x120); // 0x120 is a good starting point to decrement downwards to find the calculated checksum on the stack
@@ -142,23 +135,12 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 				uint64_t derefResult = **(uint64_t**)textPtr;
 				pointerCounter++;
 
-				//printf("result: %llx\n", derefResult);
-				//fprintf(logFile, "result: %llx\n", derefResult);
-				//fflush(logFile);
-
 				// store the ptr above 0xffffffffffffffff and then use it in our originalchecksum check
 				if (derefResult == 0xffffffffffffffff)
 				{
 					if (pointerCounter > 2)
 					{
-						//SuspendAllThreads();
-						//__debugbreak();
-
 						doubleTextChecksum = true;
-
-						//printf("found double pointer text section\n", derefResult);
-						//fprintf(logFile, "found double pointer text section\n", derefResult);
-						//fflush(logFile);
 
 						// because textptr will be pointing at 0xffffffffffffffff, increment it once 
 						// so we are pointing to the correct checksum location
@@ -186,13 +168,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 			uint64_t derefPtr = *(uint64_t*)textPtr;
 
 			if (derefPtr >= baseAddressStart && derefPtr <= baseAddressEnd)
-			{
 				uint64_t derefResult = **(uint64_t**)textPtr;
-
-				//printf("result: %llx\n", derefResult);
-				//fprintf(logFile, "result: %llx\n", derefResult);
-				//fflush(logFile);
-			}
 
 			textPtr--;
 		}
@@ -204,12 +180,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		uint32_t derefPtr = *(uint32_t*)calculatedChecksumPtr;
 
 		if (derefPtr == calculatedChecksum)
-		{
-			//printf("found calculatedChecksum on stack %llx\n", calculatedChecksumPtr);
-			//fprintf(logFile, "found calculatedChecksum on stack %llx\n", calculatedChecksumPtr);
-			//fflush(logFile);
 			break;
-		}
 
 		calculatedChecksumPtr--;
 	}
@@ -220,12 +191,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		uint32_t derefPtr = *(uint32_t*)calculatedReversedChecksumPtr;
 
 		if (derefPtr == reversedChecksum)
-		{
-			//printf("found reversedChecksum on stack %llx\n", calculatedChecksumPtr);
-			//fprintf(logFile, "found reversedChecksum on stack %llx\n", calculatedReversedChecksumPtr);
-			//fflush(logFile);
 			break;
-		}
 
 		calculatedReversedChecksumPtr--;
 	}
@@ -241,10 +207,6 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 
 		if (derefPtr >= baseAddressStart && derefPtr <= baseAddressEnd)
 		{
-			//printf("found potential checksum location: %llx\n", derefPtr);
-			//fprintf(logFile, "found potential checksum location: %llx\n", derefPtr);
-			//fflush(logFile);
-
 			if (ptrOffset == 0 && rbpOffset < 0x90)
 			{
 				if (doubleTextChecksum)
@@ -285,8 +247,6 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 		}
 	}
 	
-	//fprintf(logFile, "originalChecksum: %llx\n\n", originalChecksum);
-	//fflush(logFile);
 	return originalChecksum;
 }
 
@@ -393,37 +353,6 @@ void ntdllQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInformationClass
 	}
 }
 
-char *strstr1(const wchar_t *str, const wchar_t* substring)
-{
-    const wchar_t *a;
-    const wchar_t*b;
-
-    b = substring;
-
-    if (*b == 0) {
-        return (char *) str;
-    }
-
-    for ( ; *str != 0; str += 1) {
-        if (*str != *b) {
-            continue;
-        }
-
-        a = str;
-        while (1) {
-            if (*b == 0) {
-                return (char *) str;
-            }
-            if (*a++ != *b++) {
-                break;
-            }
-        }
-        b = substring;
-    }
-
-    return NULL;
-}
-
 void checkIfWIN32UGetsCalled()
 {
 	printf("got called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
@@ -433,29 +362,6 @@ void checkIfWIN32UGetsCalled()
 
 OBJECT_ATTRIBUTES objAttributes = {};
 UNICODE_STRING unicodeString;
-
-void ManualHookCallFunction(uint64_t functionAddress, uint64_t setInfoOffset)
-{
-	unsigned char instructionBuffer[8] = {};
-	unsigned char jmpBuffer[14] = {};
-
-	memset(instructionBuffer, 0, sizeof(char) * 8);
-	memset(jmpBuffer, 0, sizeof(char) * 14);
-
-	// reverse function address bytes
-	for (int i = 0; i < 8; i++)
-		instructionBuffer[i] = (functionAddress >> i * 8) & 0xFF;
-
-	// absolute (far) jump instruction
-	jmpBuffer[0] = 0xFF;
-	jmpBuffer[1] = 0x25; // 0x15 far call
-
-	// insert function address bytes
-	for (int i = 0; i <= 8; i++)
-		jmpBuffer[14 - i] = instructionBuffer[8 - i];
-
-	memcpy((char*)setInfoOffset, jmpBuffer, sizeof(unsigned char) * 14);
-}
 
 NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 	ACCESS_MASK DesiredAccess,
@@ -1095,13 +1001,7 @@ void createInlineAsmStub()
 
 bool arxanHealingChecksum(uint64_t rbp)
 {
-	//printf("checksum healing called\n");
-	//SuspendAllThreads();
-	//__debugbreak();
-
 	// check if rbpAddressLocationPtr is within the range of 8 bytes up & down from every checksum that we placed.
-	// if true then replace rbp+0x18 with rbp+0x10, this might not work if it does something more to rbp+0x18 afterwards
-	// we could also do a quick register comparison so we don't do "mov [rdx], eax"
 	uint64_t rbpAddressLocationPtr = *(uint64_t*)(rbp+0x10);
 
 	for (int i=0; i < stubCounter; i++)
@@ -1113,23 +1013,11 @@ bool arxanHealingChecksum(uint64_t rbp)
 		if (rbpAddressLocationPtr+0x7 >= (uint64_t)inlineStubs[i].functionAddress && 
 			rbpAddressLocationPtr-0x7 <= (uint64_t)inlineStubs[i].functionAddress)
 		{
-			//printf("checksum fixer is trying to fix our inline function: %llx\n", (uint64_t)inlineStubs[i].functionAddress);
-			
-			//SuspendAllThreads();
-			//__debugbreak();
-
 			return true;
 		}
 	}
 
 	return false;
-}
-
-void printWeirdRaxAL()
-{
-	static int counter = 0;
-	counter++;
-	printf("got called %d\n", counter);
 }
 
 struct checksumHealingLocation
@@ -1148,8 +1036,6 @@ void createChecksumHealingStub()
 		{hook::module_pattern(baseModule, "89 02 E9"), 7},
 		{hook::module_pattern(baseModule, "88 02 E9"), 7},
 	};
-
-	//const size_t allocationSize = sizeof(uint8_t) * 0x100;
 
 	const size_t allocationSize = sizeof(uint8_t) * 0x100 * 1000;
 	LPVOID healingStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
@@ -1181,7 +1067,6 @@ void createChecksumHealingStub()
 
 			void* functionAddress = healingLocations[type].checksumPattern.get(i).get<void*>(0);
 
-			// TODO: check if e8 is at the end of the instruction or else we will be memcpying a pointer that doesnt point to anything valid
 			if (*(uint8_t*)((uint8_t*)functionAddress + 2) == 0xe9)
 			{
 				memcpy(&jumpDistance, (char*)functionAddress+3, 4); // ptr after 0xE9
@@ -1224,7 +1109,6 @@ void createChecksumHealingStub()
 			asmjit::Label L1 = a.newLabel();
 			asmjit::Label DEBUG = a.newLabel();
 
-			// TODO: we might have to use xmm15 register instead of r15, risk that arxan uses is and we fuck up the registers
 			a.sub(rsp, 0x32);
 			pushad64_Min();
 
@@ -1307,9 +1191,6 @@ void createChecksumHealingStub()
 			void* asmjitResult = nullptr;
 			runtime.add(&asmjitResult, &code);
 
-			//LPVOID asmStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
-			//memset(asmStubLocation, 0x90, allocationSize);
-
 			// copy over the content to the stub
 			uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
 			memcpy(tempBuffer, asmjitResult, code.codeSize());
@@ -1343,7 +1224,8 @@ void createChecksumHealingStub()
 			FlushInstructionCache(GetCurrentProcess(), functionAddress, callInstructionLength);
 
 			previousStubOffset = currentStubOffset + sizeof(uint8_t) * code.codeSize() + 0x8;
-		
+			
+			// debugging printf
 			if (i == 0)
 				printf("type: %d %llx\n", type, functionAddress);
 		}
