@@ -32,6 +32,7 @@
 #include "utils.h"
 #include "systemhooks.h"
 #include "arxan.h"
+#include "paths.h"
 
 std::vector<intactChecksumHook> intactchecksumHooks;
 std::vector<intactBigChecksumHook> intactBigchecksumHooks;
@@ -379,7 +380,7 @@ NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 
 	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\GDI32.dll") == 0)
 	{
-		RtlInitUnicodeString(&unicodeString, L"\\??\\E:\\games\\BOCWLatest\\win32u.dll");
+		RtlInitUnicodeString(&unicodeString, win32u_dir);
 		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
 		ObjectAttributes = &objAttributes;
 		return 0x1337;
@@ -387,7 +388,7 @@ NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 
 	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\USER32.dll") == 0)
 	{
-		RtlInitUnicodeString(&unicodeString, L"\\??\\E:\\games\\BOCWLatest\\win32u.dll");
+		RtlInitUnicodeString(&unicodeString, win32u_dir);
 		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
 		ObjectAttributes = &objAttributes;
 		return 0x1337;
@@ -395,7 +396,7 @@ NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 
 	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\win32u.dll") == 0)
 	{
-		RtlInitUnicodeString(&unicodeString, L"\\??\\E:\\games\\BOCWLatest\\win32u.dll");
+		RtlInitUnicodeString(&unicodeString, win32u_dir);
 		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
 		ObjectAttributes = &objAttributes;
 		return 0x1337;

@@ -380,6 +380,7 @@
     <ClInclude Include="systemhooks.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="winstructs.h" />
+    <ClInclude Include="paths.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
