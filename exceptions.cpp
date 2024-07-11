@@ -59,13 +59,6 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			static int counter = 0;
 			counter++;
 
-			printf("called %llx\n", *(uint64_t*)((char*)info->ContextRecord->Rsp+0x1AE0));
-
-			//if (counter %= 10000)
-
-			// do checksum at 0x1b5654f8
-			//info->ContextRecord->Dr1 = ((uint64_t)GetModuleHandle(nullptr) + 0x1b5654f8);
-
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
 		}
@@ -80,8 +73,6 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 			static int counter = 0;
 			counter++;
-
-			printf("called %llx\n", *(uint64_t*)((char*)info->ContextRecord->Rsp+0x24FF8));
 
 /*
 			printf("bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
