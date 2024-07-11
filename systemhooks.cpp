@@ -41,7 +41,6 @@ HANDLE win32uOriginalFileHandle = nullptr;
 HANDLE gameHandle = nullptr;
 HANDLE debugThreadHandle = nullptr;
 bool hookedfunction = false;
-bool suspendNewThreads = false;
 char* endofTextSectionAddr = nullptr;
 void* RtlRestoreContextAddr;
 uint64_t OffsetOfSetInfoFunc = 0;
@@ -68,6 +67,15 @@ RtlRestoreContext_t RtlRestoreContextOrig;
 NtAllocateVirtualMemory_t NtAllocateVirtualMemoryOrig;
 NtMapViewOfSection_t NtMapViewOfSectionOrig;
 NtSetInformationJobObject_t NtSetInformationJobObjectOrig;
+NtUserGetClassName_t NtUserGetClassNameOrig;
+NtUserInternalGetWindowText_t NtUserInternalGetWindowTextOrig;
+
+GetWindowThreadProcessId_t GetWindowThreadProcessIdOrig;
+GetClassName_t GetClassNameOrig;
+EnumChildWindows_t EnumChildWindowsOrig;
+GetMenu_t GetMenuOrig;
+GetMenuString_t GetMenuStringOrig;
+GetSubMenu_t GetSubMenuOrig;
 
 std::vector<PVOID> VectoredExceptions;
 CONTEXT context = {};
@@ -100,7 +108,6 @@ bool SetThreadContextFunc(HANDLE thread, CONTEXT* context)
 
 HHOOK SetWindowsHookExFunc(int idHook, HOOKPROC lpfn, HINSTANCE hmod, DWORD dwThreadId)
 {
-	//printf("SetHookEx called with hook id %llx from thread id %llx\n", idHook, dwThreadId);
 	return 0;
 }
 
@@ -115,22 +122,6 @@ void RtlRestoreContextFunc(PCONTEXT ContextRecord, _EXCEPTION_RECORD* ExceptionR
 	RtlRestoreContextOrig(ContextRecord, ExceptionRecord);
 
 	MH_RemoveHook(RtlRestoreContextAddr);
-}
-
-std::vector<uint64_t> previousHandles = { 0x0 };
-
-typedef __int64(__fastcall* tryhookingmaybe_t)(__int64 a1, char* a2, unsigned __int64 a3, __int64 a4, __int64 a5, __int64 a6);
-tryhookingmaybe_t tryhookingmaybeOrig;
-
-__int64 tryHooking(__int64 a1, char* a2, unsigned __int64 a3, __int64 a4, __int64 a5, __int64 a6)
-{
-	//if (a2 != nullptr)
-	if (a2 != nullptr)
-		printf("a2: %s\n", a2);
-
-	//	printf("a4: %s\n\n", a4);
-
-	return tryhookingmaybeOrig(a1, a2, a3, a4, a5, a6);
 }
 
 NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
@@ -170,26 +161,29 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 
 		if (counter == 6)
 		{
-			char* draw2dPtr = (char*)((uint64_t)GetModuleHandle(nullptr) + 0xb5e4320);
-			*(char*)draw2dPtr++ = 0xC3;
-			*(char*)draw2dPtr++ = 0x90;
-			*(char*)draw2dPtr++ = 0x90;
-			*(char*)draw2dPtr++ = 0x90;
-			*(char*)draw2dPtr++ = 0x90;
-			printf("draw2dPtr %llx\n", draw2dPtr);
+			uint64_t baseAddr = (uint64_t)GetModuleHandle(nullptr);
 
-			/*
-			char* printfFunctionSmth = (char*)((uint64_t)GetModuleHandle(nullptr) + 0xd55aa74);
-			printf("loc %llx\n", printfFunctionSmth);
-
-			if (MH_CreateHook(printfFunctionSmth, &tryHooking, (LPVOID*)(&tryhookingmaybeOrig)) != MH_OK)
-					{ printf("hook didn't work\n"); }
-			
-			if (MH_EnableHook(printfFunctionSmth) != MH_OK)
+/*
+			if (MH_CreateHook((char*)(baseAddr + 0xb5a10d0), &Demo_OpenFileWrite, (LPVOID*)(&Demo_OpenFileWriteOrig)) != MH_OK) 
 				{ printf("hook didn't work\n"); }
-			*/
-			
+			if (MH_EnableHook((char*)(baseAddr + 0xb5a10d0)) != MH_OK) 
+				{ printf("hook didn't work\n"); }
+*/
+
 			disableTlsCallbacks();
+			// pmove offset 0x76041f0
+
+			// TODO: for our little module we will load later, modify some stuff from our player entity
+
+			// 7FF71B6A1DF3                 call    qword ptr [rsp+1AE0h]
+			// player entity state
+			//placeHardwareBP((char*)(baseAddr + 0x7FF72601DEB0 - StartOfBinary), 0, Condition::Execute);
+
+/*
+			placeHardwareBP((char*)(baseAddr + 0x7ff738c428a1 - StartOfBinary), 0, Condition::Write);
+			placeHardwareBP((char*)(baseAddr + 0x7ff736672212 - StartOfBinary), 1, Condition::Write);
+			placeHardwareBP((char*)(baseAddr + 0x7ff738e429da - StartOfBinary), 2, Condition::Write);
+*/
 		}
 	}
 
@@ -234,18 +228,12 @@ HWND NtUserFindWindowExFunc(HWND hwndParent, HWND hwndChildAfter, PUNICODE_STRIN
 {
 	printf("ntuserfindwindowexfunc got called\n");
 
-//	SuspendAllThreads();
-//	__debugbreak();
-
 	return 0;
 }
 
 HWND NtUserWindowFromPointFunc(LONG X,LONG Y)
 {
 	printf("window from point got called\n");
-
-	SuspendAllThreads();
-	__debugbreak();
 
 	return 0x0;
 }
@@ -255,54 +243,10 @@ int GetWindowTextFunc(HWND hWnd, LPSTR lpString, int nMaxCount)
 	return 0;
 }
 
+// game closes itself if we return false
 BOOL EnumWindowsFunc(WNDENUMPROC lpEnumFunc, LPARAM lParam)
 {
-	//printf("enum called\n");
 	return EnumWindowsOrig(lpEnumFunc, lParam);
-}
-
-void SleepAllThreadsBesidesMainThread()
-{
-	HANDLE snapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, GetCurrentProcessId());
-
-	THREADENTRY32 entry = {};
-	entry.dwSize = sizeof(THREADENTRY32);
-	Thread32First(snapshotHandle, &entry);
-	int counter = 0;
-
-	do {
-		if (entry.th32OwnerProcessID == GetCurrentProcessId())
-		{
-			HANDLE currentThread = OpenThread(THREAD_ALL_ACCESS, true, entry.th32ThreadID);
-			if (currentThread == NULL)
-				printf("openthread: %s\n", GetLastErrorAsString().c_str());
-			
-			char threadHiddenFromDebugger = 0;
-			NtQueryInformationThread(currentThread, ThreadHideFromDebugger, &threadHiddenFromDebugger, sizeof(char), NULL);
-
-			if (threadHiddenFromDebugger)
-				printf("thread %d debugger on: %llx\n", GetThreadId(currentThread), threadHiddenFromDebugger);
-
-#if 0
-			if (counter == 0)
-			{
-				gameHandle = currentThread;
-				counter++;
-				continue;
-			}
-#else
-			// doing suspendallthreads early or too late
-				if (GetCurrentThreadId() == entry.th32ThreadID)
-					continue;
-#endif
-
-
-			DWORD suspendResult = SuspendThread(currentThread);
-			if (suspendResult == -1)
-				printf("suspend: %s\n", GetLastErrorAsString().c_str());
-		}
-
-	} while (Thread32Next(snapshotHandle, &entry));
 }
 
 HANDLE WINAPI CreateThreadFunc(LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId)
@@ -354,10 +298,11 @@ HANDLE CreateMutexExFunc(const LPSECURITY_ATTRIBUTES attributes, const LPCSTR na
 	return CreateMutexExOrig(attributes, name, flags, access);
 }
 
+// TODO: maybe causes a startup crash now? tries to read memory from 0x0 inside crashdump
 HANDLE NtUserQueryWindowFunc(HWND hwnd, WINDOWINFOCLASS WindowInfo)
 {
-	/*
-	if ((WindowInfo == WindowProcess || WindowInfo == WindowThread) && IsWindowBad(hwnd))
+	//if ((WindowInfo == WindowProcess || WindowInfo == WindowThread) && IsWindowBad(hwnd))
+	if (WindowInfo == WindowProcess || WindowInfo == WindowThread)
 	{
 		if (WindowInfo == WindowProcess)
 			return NtCurrentTeb()->ClientId.UniqueProcess;
@@ -365,27 +310,33 @@ HANDLE NtUserQueryWindowFunc(HWND hwnd, WINDOWINFOCLASS WindowInfo)
 			return NtCurrentTeb()->ClientId.UniqueThread;
 	}
 
-	HANDLE result = NtUserQueryWindowOrig(hwnd, WindowInfo);
-	return result;
-	*/
-
-	// TODO: maybe causes a startup crash now? tries to read memory from 0x0 inside crashdump
-	return 0x0;
+	return NtUserQueryWindowOrig(hwnd, WindowInfo);
 }
 
 HWND NtUserGetForegroundWindowFunc()
 {
+	/*
 	HWND result = NtUserGetForegroundWindowOrig();
 
 	if (result != nullptr && IsWindowBad(result))
 		result = NULL;
 
 	return result;
+	*/
+
+	HWND result = NtUserGetForegroundWindowOrig();
+	DWORD processId = 0;
+	GetWindowThreadProcessIdOrig(result, &processId);
+
+	if (processId == GetCurrentProcessId())
+		return result;
+	else
+		return 0x0;
 }
 
 NTSTATUS NtUserBuildHwndListFunc(HDESK hDesk, HWND hWndNext, BOOL EnumChildren, BOOL RemoveImmersive, DWORD ThreadID, UINT Max, HWND* List, PULONG Cnt)
 {
-	NTSTATUS result = NtUserBuildHwndListOrig(hDesk, hWndNext, EnumChildren, RemoveImmersive, ThreadID, Max, List, Cnt);
+	NTSTATUS result = NtUserBuildHwndListOrig(hDesk, hWndNext, 0, RemoveImmersive, ThreadID, Max, List, Cnt);
 
 	if (NT_SUCCESS(result) && List != nullptr && Cnt != nullptr)
 		FilterHwndList(List, Cnt);
@@ -393,17 +344,54 @@ NTSTATUS NtUserBuildHwndListFunc(HDESK hDesk, HWND hWndNext, BOOL EnumChildren, 
 	return result;
 }
 
+DWORD GetWindowThreadProcessIdFunc(HWND hWnd, LPDWORD lpdwProcessId)
+{
+	//return GetWindowThreadProcessIdOrig(hWnd, lpdwProcessId);
+	return 0x0;
+}
+
+int GetClassNameFunc(HWND hWnd, LPSTR lpClassName, int nMaxCount)
+{
+	//return GetClassNameOrig(hWnd, lpClassName, nMaxCount);
+	return 0x0;
+}
+
+
+BOOL EnumChildWindowsFunc(HWND hWndParent, WNDENUMPROC lpEnumFunc, LPARAM lParam)
+{
+	//return EnumChildWindowsOrig(hWndParent, lpEnumFunc, lParam);
+	return false;
+}
+
+
+HMENU GetMenuFunc(HWND hWnd)
+{
+	//return GetMenuOrig(hWnd);
+	return 0x0;
+}
+
+
+int GetMenuStringFunc(HMENU hMenu,UINT uIDItem,LPSTR lpString, int cchMax,UINT flags)
+{
+	//return GetMenuStringOrig(hMenu, uIDItem, lpString, cchMax, flags);
+	return 0x0;
+}
+
+
+HMENU GetSubMenuFunc(HMENU hMenu, int nPos)
+{
+	//return GetSubMenuOrig(hMenu, nPos);
+	return 0x0;
+}
+
 BOOL CheckRemoteDebuggerPresentFunc(HANDLE hProcess, PBOOL pbDebuggerPresent)
 {
-	//printf("checked for debugger %llx\n", _ReturnAddress());
-
 	*(BOOL*)pbDebuggerPresent = false;
 	return true;
 }
 
 PVOID AddVectoredExceptionHandlerFunc(ULONG First, PVECTORED_EXCEPTION_HANDLER Handler)
 {
-	//printf("exception handler added %llx\n", Handler);
 	PVOID handler = AddVectoredExceptionHandlerOrig(First, Handler);
 
 	VectoredExceptions.push_back(handler);
@@ -412,44 +400,7 @@ PVOID AddVectoredExceptionHandlerFunc(ULONG First, PVECTORED_EXCEPTION_HANDLER H
 
 LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilterFunc(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
 {
-	//printf("seh filter called\n");
-
-	//return SetUnhandledExceptionFilterOrig(lpTopLevelExceptionFilter);
 	return 0;
-}
-
-// TODO: Sets BeingDebugged to a funny number so we cant just hook it and return 0
-// Crashes the game after a while
-DWORD WINAPI hide_being_debugged(LPVOID lpReserved)
-{
-	while (true) {
-		auto* const peb = reinterpret_cast<PPEB>(__readgsqword(0x60));
-		peb->BeingDebugged = false;
-		*reinterpret_cast<PDWORD>(LPSTR(peb) + 0xBC) &= ~0x70;
-	}
-}
-
-void ManualHookFunction(uint64_t functionAddress, uint64_t setInfoOffset)
-{
-	unsigned char instructionBuffer[8] = {};
-	unsigned char jmpBuffer[14] = {};
-
-	memset(instructionBuffer, 0, sizeof(char) * 8);
-	memset(jmpBuffer, 0, sizeof(char) * 14);
-
-	// reverse function address bytes
-	for (int i = 0; i < 8; i++)
-		instructionBuffer[i] = (functionAddress >> i * 8) & 0xFF;
-
-	// absolute (far) jump instruction
-	jmpBuffer[0] = 0xFF;
-	jmpBuffer[1] = 0x25;
-
-	// insert function address bytes
-	for (int i = 0; i <= 8; i++)
-		jmpBuffer[14 - i] = instructionBuffer[8 - i];
-
-	memcpy((char*)setInfoOffset, jmpBuffer, sizeof(unsigned char) * 14);
 }
 
 void generalTlsCallbackFunction()
@@ -485,213 +436,6 @@ void disableTlsCallbacks()
 	printf("disabled tls callbacks\n");
 }
 
-void SuspendAllThreads()
-{
-	//printf("suspended: %llx %d\n", GetCurrentThreadId(), GetCurrentThreadId());
-	RestoreNtdllDbgFunctions();
-
-	for (int i = 0; i < VectoredExceptions.size(); i++)
-	{
-		auto result = RemoveVectoredExceptionHandler(VectoredExceptions[i]);
-		//if (result != NULL)
-		//	printf("removed exception handle at %llx\n", VectoredExceptions[i]);
-	}
-
-	//auto result = RemoveVectoredExceptionHandler(exceptionHandle);
-	//if (result != NULL)
-	//	printf("removed our own exception handle\n");
-
-	weAreDebugging = true;
-#if REMOVE_HWBP_ON_SUSPEND
-	removeAllHardwareBP();
-#endif
-
-	printf("start\n");
-
-	suspendNewThreads = false;
-	SleepAllThreadsBesidesMainThread();
-
-	printf("suspended\n");
-
-	if (inputHandle != nullptr)
-		ResumeThread(inputHandle);
-
-#if REMOVE_HWBP_ON_SUSPEND
-	void* RtlRestoreContextAddr = (void*)GetProcAddress(GetModuleHandle("ntdll.dll"), "RtlRestoreContext");
-
-	if (MH_CreateHook(RtlRestoreContextAddr, &RtlRestoreContextFunc, (LPVOID*)(&RtlRestoreContextOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_EnableHook(RtlRestoreContextAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-#endif
-
-	if (MH_DisableHook(MH_ALL_HOOKS) != MH_OK)
-		printf("couldnt remove all hooks\n");
-
-	disableTlsCallbacks();
-
-	printf("tls callback removed\n");
-
-	// cold war removes the function ptr from ntdll Kernel32ThreadInitThunkFunction to its own, redirecting createremotethread
-	// does rdtsc checks which in turn makes it so that if the process is completely suspended, will crash on created threads
-	void* BaseInitThread = (void*)GetProcAddress(GetModuleHandle("ntdll.dll"), "RtlUserThreadStart");
-	void* BaseThreadInitThunk = (void*)GetProcAddress(GetModuleHandle("kernel32.dll"), "BaseThreadInitThunk");
-
-	PVOID RtlUserThreadStart = (PVOID)((DWORD64)BaseInitThread + 0x7);
-	DWORD64 RtlUserThreadStartFuncOffset = (UINT64)((PUCHAR)RtlUserThreadStart + *(PULONG)((PUCHAR)RtlUserThreadStart + 0x3) + 0x7);
-	uint64_t* basethreadinitptr = (uint64_t*)RtlUserThreadStartFuncOffset;
-	memcpy(basethreadinitptr, &BaseThreadInitThunk, sizeof(uint64_t));
-	
-	printf("Kernel32ThreadInitThunkFunction\n");
-
-	char threadHiddenFromDebugger = 0;
-	NtQueryInformationThread(GetCurrentThread(), ThreadHideFromDebugger, &threadHiddenFromDebugger, sizeof(char), NULL);
-
-	if (threadHiddenFromDebugger)
-		printf("thread %d suspend: %llx\n", GetThreadId(GetCurrentThread()), threadHiddenFromDebugger);
-
-	auto* const peb = reinterpret_cast<PPEB>(__readgsqword(0x60));
-	peb->BeingDebugged = false;
-	*reinterpret_cast<PDWORD>(LPSTR(peb) + 0xBC) &= ~0x70;
-
-	printf("attach debugger\n");
-	
-	//while (true) {Sleep(100); __debugbreak();}
-
-	// TODO: remove this back to how it normally was after we are done debugging
-	while (!IsDebuggerPresent()) {
-		Sleep(100);
-	}
-	//assert(0);
-
-	//SuspendThread(GetCurrentThread());
-	//printf("running...\n");
-}
-
-void placeHardwareBP(void* addr, int count, Condition condition)
-{
-	context.ContextFlags = (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_AMD64);
-
-	switch (count)
-	{
-	case 0:
-		context.Dr0 = (DWORD64)addr;
-		SetBits((unsigned long&)context.Dr7, 0, 1, 1);
-		SetBits((unsigned long&)context.Dr7, 16, 2, condition);
-		SetBits((unsigned long&)context.Dr7, 18, 2, 8);
-		break;
-	case 1:
-		context.Dr1 = (DWORD64)addr;
-		SetBits((unsigned long&)context.Dr7, 2, 1, 1);
-		SetBits((unsigned long&)context.Dr7, 20, 2, condition);
-		SetBits((unsigned long&)context.Dr7, 22, 2, 8);
-		break;
-	case 2:
-		context.Dr2 = (DWORD64)addr;
-		SetBits((unsigned long&)context.Dr7, 4, 1, 1);
-		SetBits((unsigned long&)context.Dr7, 24, 2, condition);
-		SetBits((unsigned long&)context.Dr7, 26, 2, 8);
-		break;
-	case 3:
-		context.Dr3 = (DWORD64)addr;
-		SetBits((unsigned long&)context.Dr7, 6, 1, 1);
-		SetBits((unsigned long&)context.Dr7, 28, 2, condition);
-		SetBits((unsigned long&)context.Dr7, 30, 2, 8);
-		break;
-	default:
-		printf("Error: bp count is out of scope!\n");
-	}
-
-	bool result = SetThreadContextOrig(GetCurrentThread(), &context);
-
-	if (result == 0)
-		printf("didn't work to overwrite thread context\n");
-
-	// Loop each thread and attach breakpoints
-	HANDLE snapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, GetCurrentProcessId());
-
-	THREADENTRY32 entry = {};
-	entry.dwSize = sizeof(THREADENTRY32);
-	Thread32First(snapshotHandle, &entry);
-
-	do {
-		if (entry.th32OwnerProcessID == GetCurrentProcessId())
-		{
-			HANDLE currentThread = OpenThread(THREAD_ALL_ACCESS, false, entry.th32ThreadID);
-			bool setThreadResult = SetThreadContextOrig(currentThread, &context);
-
-			if (setThreadResult == 0)
-				printf("didn't work to overwrite thread context\n");
-		}
-
-	} while (Thread32Next(snapshotHandle, &entry));
-
-	printf("bp %d placed at %llx\n", count + 1, addr);
-}
-
-void removeAllHardwareBP()
-{
-	context.ContextFlags = (CONTEXT_DEBUG_REGISTERS & ~CONTEXT_AMD64);
-
-	context.Dr0 = 0;
-	SetBits((unsigned long&)context.Dr7, 0, 1, 0);
-	SetBits((unsigned long&)context.Dr7, 16, 2, 0);
-	SetBits((unsigned long&)context.Dr7, 18, 2, 0);
-
-	context.Dr1 = 0;
-	SetBits((unsigned long&)context.Dr7, 2, 1, 0);
-	SetBits((unsigned long&)context.Dr7, 20, 2, 0);
-	SetBits((unsigned long&)context.Dr7, 22, 2, 0);
-
-	context.Dr2 = 0;
-	SetBits((unsigned long&)context.Dr7, 4, 1, 0);
-	SetBits((unsigned long&)context.Dr7, 24, 2, 0);
-	SetBits((unsigned long&)context.Dr7, 26, 2, 0);
-
-	context.Dr3 = 0;
-	SetBits((unsigned long&)context.Dr7, 6, 1, 0);
-	SetBits((unsigned long&)context.Dr7, 28, 2, 0);
-	SetBits((unsigned long&)context.Dr7, 30, 2, 0);
-
-	HANDLE mainThread = OpenThread(THREAD_ALL_ACCESS, false, GetCurrentThreadId());
-	//bool result = SetThreadContextOrig(GetCurrentThread(), &context);
-	bool result1 = SetThreadContextOrig(mainThread, &context);
-	if (result1 == 0)
-		printf("didn't work to overwrite thread context!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-
-	bool result2 = SetThreadContextOrig(GetCurrentThread(), &context);
-	if (result2 == 0)
-		printf("didn't work to overwrite thread context!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-
-	// Loop each thread and attach breakpoints
-	HANDLE snapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, GetCurrentProcessId());
-	if (snapshotHandle == INVALID_HANDLE_VALUE)
-		printf("couldn't get snapshot\n");
-
-	THREADENTRY32 entry = {};
-	entry.dwSize = sizeof(THREADENTRY32);
-	Thread32First(snapshotHandle, &entry);
-
-	do {
-		if (entry.th32OwnerProcessID == GetCurrentProcessId())
-		{
-			HANDLE currentThread = OpenThread(THREAD_ALL_ACCESS, false, entry.th32ThreadID);
-			bool setThreadResult = SetThreadContextOrig(currentThread, &context);
-
-			//if (setThreadResult == 0)
-			//	printf("didn't work to overwrite thread context\n");
-		}
-
-	} while (Thread32Next(snapshotHandle, &entry));
-
-	printf("removed all hardware bp's\n");
-}
-
 void InitializeSystemHooks()
 {
 	void* GetThreadContextAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "GetThreadContext");
@@ -704,173 +448,86 @@ void InitializeSystemHooks()
 	void* CreateThreadAddr = (void*)GetProcAddress(GetModuleHandle("kernel32.dll"), "CreateThread");
 	void* CreateMutexExAddr = (void*)GetProcAddress(GetModuleHandle("kernel32.dll"), "CreateMutexExA");
 
-	void* SetWindowsHookExAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "SetWindowsHookExW");
-	void* GetWindowTextAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetWindowTextA");
-	void* CreateWindowExAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "CreateWindowExW");
-	void* EnumWindowsAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "EnumWindows");
-
 	void* NtAllocateVirtualMemoryAddr = (void*)GetProcAddress(GetModuleHandle("ntdll.dll"), "NtAllocateVirtualMemory");
 
-	// win32u.dll
+	void* EnumWindowsAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "EnumWindows");
+	void* GetWindowThreadProcessIdAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetWindowThreadProcessId");
+	void* GetClassNameAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetClassNameA");
+	void* GetWindowTextAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetWindowTextA");
+	void* EnumChildWindowsAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "EnumChildWindows");
+	void* GetMenuAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetMenu");
+	void* GetMenuStringAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetMenuStringA");
+	void* GetSubMenuAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "GetSubMenu");
+	void* SetWindowsHookExAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "SetWindowsHookExW");
+	void* CreateWindowExAddr = (void*)GetProcAddress(GetModuleHandle("user32.dll"), "CreateWindowExW");
+
 	void* NtUserQueryWindowAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserQueryWindow");
 	void* NtUserGetForegroundWindowAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserGetForegroundWindow");
 	void* NtUserBuildHwndListAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserBuildHwndList");
 	void* NtUserFindWindowExAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserFindWindowEx");
 	void* NtUserWindowFromPointAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserWindowFromPoint");
+	void* NtUserInternalGetWindowTextAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserInternalGetWindowText");
+	void* NtUserGetWindowProcessHandleAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserGetWindowProcessHandle");
+	void* NtUserGetTopLevelWindowAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserGetTopLevelWindow");
+	void* NtUserChildWindowFromPointExAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserChildWindowFromPointEx");
+	void* NtUserInternalGetWindowIconAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserInternalGetWindowIcon");
+	void* NtUserRealChildWindowFromPointAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserRealChildWindowFromPoint");
+	void* NtUserWindowFromDCAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserWindowFromDC");
+	void* NtUserGetClassNameAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserGetClassName");
 
-	if (MH_CreateHook(NtUserFindWindowExAddr, &NtUserFindWindowExFunc, (LPVOID*)(&NtUserFindWindowExOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
 
-	if (MH_EnableHook(NtUserFindWindowExAddr) != MH_OK)
+	struct hook_t
 	{
-		printf("hook didn't work\n");
-	}
+		void* addr;
+		void* ourFunction;
+		void** originalFunction;
+	};
 
-	if (MH_CreateHook(NtUserWindowFromPointAddr, &NtUserWindowFromPointFunc, (LPVOID*)(&NtUserWindowFromPointOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
+	hook_t hooks[] {
+		{NtUserFindWindowExAddr, &NtUserFindWindowExFunc, (LPVOID*)(&NtUserFindWindowExOrig)},
+		{NtUserWindowFromPointAddr, &NtUserWindowFromPointFunc, (LPVOID*)(&NtUserWindowFromPointOrig)},
+		{CreateWindowExAddr, &CreateWindowExFunc, (LPVOID*)(&CreateWindowExOrig)},
+		{GetWindowTextAddr, &GetWindowTextFunc, (LPVOID*)(&GetWindowTextOrig)},
+		{EnumWindowsAddr, &EnumWindowsFunc, (LPVOID*)(&EnumWindowsOrig)},
+		{GetThreadContextAddr, &GetThreadContextFunc, (LPVOID*)(&GetThreadContextOrig)},
+		{SetThreadContextAddr, &SetThreadContextFunc, (LPVOID*)(&SetThreadContextOrig)},
+		{CreateThreadAddr, &CreateThreadFunc, (LPVOID*)(&CreateThreadOrig)},
+		{SetWindowsHookExAddr, &SetWindowsHookExFunc, (LPVOID*)(&SetWindowsHookExOrig)},
+		{CreateMutexExAddr, &CreateMutexExFunc, (LPVOID*)(&CreateMutexExOrig)},
+		{NtAllocateVirtualMemoryAddr, &NtAllocateVirtualMemoryFunc, (LPVOID*)(&NtAllocateVirtualMemoryOrig)},
+		{CheckRemoteDebuggerPresentAddr, &CheckRemoteDebuggerPresentFunc, (LPVOID*)(&CheckRemoteDebuggerPresentOrig)},
+		{AddVectoredExceptionHandlerAddr, &AddVectoredExceptionHandlerFunc, (LPVOID*)(&AddVectoredExceptionHandlerOrig)},
+		{SetUnhandledExceptionFilterAddr, &SetUnhandledExceptionFilterFunc, (LPVOID*)(&SetUnhandledExceptionFilterOrig)},
+		{NtUserGetForegroundWindowAddr, &NtUserGetForegroundWindowFunc, (LPVOID*)(&NtUserGetForegroundWindowOrig)},
+		{NtUserBuildHwndListAddr, &NtUserBuildHwndListFunc, (LPVOID*)(&NtUserBuildHwndListOrig)},
+		
+		// might crash more frequent?
+		{NtUserQueryWindowAddr, &NtUserQueryWindowFunc, (LPVOID*)(&NtUserQueryWindowOrig)},
 
-	if (MH_EnableHook(NtUserWindowFromPointAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
+		{GetWindowThreadProcessIdAddr, &GetWindowThreadProcessIdFunc, (LPVOID*)(&GetWindowThreadProcessIdOrig)},
+		{GetClassNameAddr, &GetClassNameFunc, (LPVOID*)(&GetClassNameOrig)},
+		{EnumChildWindowsAddr, &EnumChildWindowsFunc, (LPVOID*)(&EnumChildWindowsOrig)},
+		{GetMenuAddr, &GetMenuFunc, (LPVOID*)(&GetMenuOrig)},
+		{GetMenuStringAddr, &GetMenuStringFunc, (LPVOID*)(&GetMenuStringOrig)},
+		{GetSubMenuAddr, &GetSubMenuFunc, (LPVOID*)(&GetSubMenuOrig)},
+		
+		{NtUserInternalGetWindowTextAddr, &GetMenuFunc, (LPVOID*)(&NtUserInternalGetWindowTextOrig)},
+		{NtUserGetWindowProcessHandleAddr, &GetMenuFunc, NULL},
+		{NtUserGetTopLevelWindowAddr, &GetMenuFunc, NULL},
+		{NtUserChildWindowFromPointExAddr, &GetMenuFunc, NULL},
+		{NtUserInternalGetWindowIconAddr, &GetMenuFunc, NULL},
+		{NtUserRealChildWindowFromPointAddr, &GetMenuFunc, NULL},
+		{NtUserWindowFromDCAddr, &GetMenuFunc, NULL},
+		{NtUserGetClassNameAddr, &GetMenuFunc, (LPVOID*)(&NtUserGetClassNameOrig)},
+	};
 
-	if (MH_CreateHook(CreateWindowExAddr, &CreateWindowExFunc, (LPVOID*)(&CreateWindowExOrig)) != MH_OK)
+	size_t amountHooks = sizeof(hooks) / sizeof(hook_t);
+	for (int i=0; i < amountHooks; i++)
 	{
-		printf("hook didn't work\n");
-	}
+		if (MH_CreateHook(hooks[i].addr, hooks[i].ourFunction, hooks[i].originalFunction) != MH_OK)
+			printf("hook didn't work\n");
 
-	if (MH_EnableHook(CreateWindowExAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(GetWindowTextAddr, &GetWindowTextFunc, (LPVOID*)(&GetWindowTextOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(GetWindowTextAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(EnumWindowsAddr, &EnumWindowsFunc, (LPVOID*)(&EnumWindowsOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(EnumWindowsAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(GetThreadContextAddr, &GetThreadContextFunc, (LPVOID*)(&GetThreadContextOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(GetThreadContextAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(SetThreadContextAddr, &SetThreadContextFunc, (LPVOID*)(&SetThreadContextOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(SetThreadContextAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(CreateThreadAddr, &CreateThreadFunc, (LPVOID*)(&CreateThreadOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(CreateThreadAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(SetWindowsHookExAddr, &SetWindowsHookExFunc, (LPVOID*)(&SetWindowsHookExOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(SetWindowsHookExAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(CreateMutexExAddr, &CreateMutexExFunc, (LPVOID*)(&CreateMutexExOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(CreateMutexExAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(NtAllocateVirtualMemoryAddr, &NtAllocateVirtualMemoryFunc, (LPVOID*)(&NtAllocateVirtualMemoryOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(NtAllocateVirtualMemoryAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(CheckRemoteDebuggerPresentAddr, &CheckRemoteDebuggerPresentFunc, (LPVOID*)(&CheckRemoteDebuggerPresentOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(CheckRemoteDebuggerPresentAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(AddVectoredExceptionHandlerAddr, &AddVectoredExceptionHandlerFunc, (LPVOID*)(&AddVectoredExceptionHandlerOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(AddVectoredExceptionHandlerAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(SetUnhandledExceptionFilterAddr, &SetUnhandledExceptionFilterFunc, (LPVOID*)(&SetUnhandledExceptionFilterOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(SetUnhandledExceptionFilterAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(NtUserQueryWindowAddr, &NtUserQueryWindowFunc, (LPVOID*)(&NtUserQueryWindowOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(NtUserQueryWindowAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(NtUserGetForegroundWindowAddr, &NtUserGetForegroundWindowFunc, (LPVOID*)(&NtUserGetForegroundWindowOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(NtUserGetForegroundWindowAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-
-	if (MH_CreateHook(NtUserBuildHwndListAddr, &NtUserBuildHwndListFunc, (LPVOID*)(&NtUserBuildHwndListOrig)) != MH_OK)
-	{
-		printf("hook didn't work\n");
-	}
-	if (MH_EnableHook(NtUserBuildHwndListAddr) != MH_OK)
-	{
-		printf("hook didn't work\n");
+		if (MH_EnableHook(hooks[i].addr) != MH_OK)
+			printf("hook didn't work\n");
 	}
 }

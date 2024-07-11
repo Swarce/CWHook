@@ -12,19 +12,7 @@
 #include <sys/stat.h>
 #include <filesystem>
 
-typedef enum _WINDOWINFOCLASS {
-	WindowProcess,
-	WindowThread,
-	WindowActiveWindow,
-	WindowFocusWindow,
-	WindowIsHung,
-	WindowClientBase,
-	WindowIsForegroundThread,
-#ifdef FE_IME
-	WindowDefaultImeWindow,
-	WindowDefaultInputContext,
-#endif
-} WINDOWINFOCLASS;
+#include "systemhooks.h"
 
 const extern WCHAR* BadProcessnameList[];
 const extern WCHAR* BadWindowTextList[];
@@ -35,6 +23,7 @@ const uint64_t StartOfTextSection = 0x7FF71AA91000;
 const uint64_t StartOfBinary = 0x7FF71AA90000;
 
 extern FILE* logFile;
+extern bool suspendNewThreads;
 
 // temporary fix until we nop out all the arxan "self healing" spots in the executable
 struct intactChecksumHook
@@ -68,11 +57,18 @@ struct inlineAsmStub {
 	checksumType type;
 };
 
+enum Condition { Execute = 0, Write = 1, ReadWrite = 3 };
+
+void removeAllHardwareBP();
+void SuspendAllThreads();
+void placeHardwareBP(void* addr, int count, Condition condition);
+
 bool RtlUnicodeStringContains(PUNICODE_STRING Str, PUNICODE_STRING SubStr, BOOLEAN CaseInsensitive);
 bool IsWindowClassNameBad(PUNICODE_STRING className);
 bool IsWindowNameBad(PUNICODE_STRING windowName);
 bool IsWindowBad(HWND hWnd);
 void FilterHwndList(HWND* phwndFirst, PULONG pcHwndNeeded);
+void ManualHookFunction(uint64_t functionAddress, uint64_t setInfoOffset);
 std::string GetLastErrorAsString();
 
 inline void SetBits(unsigned long& dw, int lowBit, int bits, int newValue)

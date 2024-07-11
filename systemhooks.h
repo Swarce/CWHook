@@ -8,6 +8,7 @@
 #include <minidumpapiset.h>
 #include <TlHelp32.h>
 #include <mmeapi.h>
+
 #include "utils.h"
 
 extern void* breakpointAddress;
@@ -15,19 +16,39 @@ extern HANDLE inputHandle;
 extern DWORD inputThreadId;
 extern CONTEXT context;
 extern bool weAreDebugging;
-enum Condition { Execute = 0, Write = 1, ReadWrite = 3 };
+extern std::vector<PVOID> VectoredExceptions;
+
+typedef enum _WINDOWINFOCLASS {
+	WindowProcess,
+	WindowThread,
+	WindowActiveWindow,
+	WindowFocusWindow,
+	WindowIsHung,
+	WindowClientBase,
+	WindowIsForegroundThread,
+#ifdef FE_IME
+	WindowDefaultImeWindow,
+	WindowDefaultInputContext,
+#endif
+} WINDOWINFOCLASS;
 
 #define REMOVE_HWBP_ON_SUSPEND 0
 
 typedef int(__stdcall* SetThreadContext_t)(HANDLE hThread, CONTEXT* lpContext);
 extern SetThreadContext_t SetThreadContextOrig;
 
+typedef HANDLE(__stdcall* NtUserQueryWindow_t)(HWND hwnd, WINDOWINFOCLASS WindowInfo);
+extern NtUserQueryWindow_t NtUserQueryWindowOrig;
+
+typedef __int64(__stdcall* NtUserInternalGetWindowText_t)(HWND hWnd, LPWSTR lpString, INT nMaxCount);
+extern NtUserInternalGetWindowText_t NtUserInternalGetWindowTextOrig;
+
+typedef int(__stdcall* NtUserGetClassName_t)(HWND hwnd, BOOL real, UNICODE_STRING* name);
+extern NtUserGetClassName_t NtUserGetClassNameOrig;
+
 void InitializeSystemHooks();
 void disableTlsCallbacks();
-void removeAllHardwareBP();
-void SuspendAllThreads();
-void ManualHookFunction(uint64_t functionAddress, uint64_t setInfoOffset);
-void placeHardwareBP(void* addr, int count, Condition condition);
+
 
 typedef HWND(__stdcall* CreateWindowEx_t)(DWORD     dwExStyle,
 	LPCSTR    lpClassName,
@@ -58,7 +79,6 @@ typedef PVOID(__stdcall* AddVectoredExceptionHandler_t)(ULONG First, PVECTORED_E
 
 typedef LPTOP_LEVEL_EXCEPTION_FILTER(__stdcall* SetUnhandledExceptionFilter_t)(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter);
 
-typedef HANDLE(__stdcall* NtUserQueryWindow_t)(HWND hwnd, WINDOWINFOCLASS WindowInfo);
 
 typedef HWND(__stdcall* NtUserGetForegroundWindow_t)();
 
@@ -69,6 +89,13 @@ typedef NTSTATUS(__stdcall* NtSetInformationProcess_t)(HANDLE ProcessHandle, PRO
 typedef NTSTATUS(__stdcall* NtQuerySystemInformation_t)(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
 
 typedef BOOL(__stdcall* CheckRemoteDebuggerPresent_t)(HANDLE hProcess, PBOOL pbDebuggerPresent);
+
+typedef DWORD(__stdcall* GetWindowThreadProcessId_t)(HWND hWnd, LPDWORD lpdwProcessId);
+typedef int(__stdcall* GetClassName_t)(HWND hWnd, LPSTR lpClassName, int nMaxCount);
+typedef BOOL(__stdcall* EnumChildWindows_t)(HWND hWndParent, WNDENUMPROC lpEnumFunc, LPARAM lParam);
+typedef HMENU(__stdcall* GetMenu_t)(HWND hWnd);
+typedef int(__stdcall* GetMenuString_t)(HMENU hMenu,UINT uIDItem,LPSTR lpString, int cchMax,UINT flags);
+typedef HMENU(__stdcall* GetSubMenu_t)(HMENU hMenu, int nPos);
 
 typedef HANDLE(__stdcall* CreateMutexEx_t)(const LPSECURITY_ATTRIBUTES attributes, const LPCSTR name, const DWORD flags, const DWORD access);
 
