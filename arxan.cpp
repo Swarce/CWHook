@@ -33,6 +33,7 @@
 #include "systemhooks.h"
 #include "arxan.h"
 #include "paths.h"
+#include "syscalls.h"
 
 std::vector<intactChecksumHook> intactchecksumHooks;
 std::vector<intactBigChecksumHook> intactBigchecksumHooks;
@@ -444,25 +445,22 @@ void ntdllAsmStub()
 	a.test(byte_ptr(0x7FFE0308), 1);
 	a.jnz(L1);
 
-	a.cmp(rax, 0xd);
+	a.cmp(rax, SetInformationSysCall);
 	a.je(SetInformation);
-	a.cmp(rax, 0x4e);
-	a.je(CreateThread);
-	a.cmp(rax, 0x25);
+	a.cmp(rax, QueryInformationSysCall);
 	a.je(QueryInformation);
-	a.cmp(rax, 0xc1);
+	a.cmp(rax, CreateThreadSysCall);
+	a.je(CreateThread);
+	a.cmp(rax, CreateThreadExSysCall);
 	a.je(CreateThreadEx);
 
-	a.cmp(rax, 0x19);	// NtQueryInformationProcessAddr
+	a.cmp(rax, QueryInformationProcessSysCall);	// NtQueryInformationProcessAddr
 	a.je(QueryInformationProcess);
-	a.cmp(rax, 0x36);	// NtQuerySystemInformationAddr
+	a.cmp(rax, QuerySystemInformationSysCall);	// NtQuerySystemInformationAddr
 	a.je(QuerySystemInformation);
 
-	a.cmp(rax, 0x55);
+	a.cmp(rax, CreateFileSysCall);
 	a.je(CreateFile);
-
-	a.cmp(rax, 0xf7);
-	a.je(DEBUG);
 
 	a.bind(RegularSyscall);
 		a.syscall();
@@ -660,7 +658,7 @@ void ntdllAsmStub()
 		a.mov(dword_ptr(rsp, 0x38), eax);
 
 		// create thread with syscall
-		a.mov(rax, 0xc1);
+		a.mov(rax, CreateThreadExSysCall);
 		a.mov(r15, rcx);
 		a.syscall();
 		a.mov(rdx, rax);

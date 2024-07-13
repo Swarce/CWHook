@@ -72,11 +72,11 @@
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>E:\games\BOCWLatest</OutDir>
+    <OutDir>D:\Games\BOCWLatest</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>E:\games\BOCWLatest</OutDir>
+    <OutDir>D:\Games\BOCWLatest</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -377,6 +377,7 @@
     <ClInclude Include="main.h" />
     <ClInclude Include="notes.h" />
     <ClInclude Include="restorentdll.h" />
+    <ClInclude Include="syscalls.h" />
     <ClInclude Include="systemhooks.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="winstructs.h" />

@@ -602,6 +602,9 @@
     <ClInclude Include="paths.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="syscalls.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="powrprof.asm">

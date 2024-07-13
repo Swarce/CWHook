@@ -24,6 +24,7 @@
 #include "gamehooks.h"
 #include "arxan.h"
 #include "instrumentationCallbacks.h"
+#include "paths.h"
 
 int mainThreadId = 0;
 char* baseFuncAddr = nullptr;
@@ -63,7 +64,6 @@ int main()
 		waveOutSetVolume(NULL, 0);
 
 	// remove cached files for isTrial to work
-	const char configPath[] = "C://Users//user//Documents//Call Of Duty Black Ops Cold War//player";
 
 	for (const auto& entry : std::filesystem::directory_iterator(configPath))
 	{
@@ -75,7 +75,6 @@ int main()
 	}
 
 	// remove crashdumps
-	const char crashPath[] = "C://Users//user//AppData//Local//CrashDumps";
 
 	for (const auto& entry : std::filesystem::directory_iterator(crashPath))
 	{

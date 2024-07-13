@@ -30,6 +30,7 @@
 #include "systemhooks.h"
 #include "exceptions.h"
 #include "arxan.h"
+#include "paths.h"
 
 bool weAreDebugging = false;
 DWORD inputThreadId = -1;
@@ -133,7 +134,7 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 {
 	NTSTATUS result = NtAllocateVirtualMemoryOrig(ProcessHandle,BaseAddress,ZeroBits,RegionSize,AllocationType,Protect);
 
-	if (Protect & PAGE_EXECUTE_READWRITE && *(SIZE_T*)RegionSize == 0x1EF000)
+	if (Protect & PAGE_EXECUTE_READWRITE && *(SIZE_T*)RegionSize == ntdllSize)
 	{
 		static int counter = 0;
 		counter++;
