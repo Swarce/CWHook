@@ -31,6 +31,13 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -56,6 +63,9 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -71,12 +81,16 @@
     <OutDir>D:\Games\BOCW</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Win32'">
+    <OutDir>D:\Games\BOCW</OutDir>
+    <TargetName>powrprof</TargetName>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>D:\Games\BOCWLatest</OutDir>
+    <OutDir>D:\Games\BOCWLatest\</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>D:\Games\BOCWLatest</OutDir>
+    <OutDir>D:\Games\BOCWLatest\</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -104,6 +118,34 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;DEFAULTHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <ModuleDefinitionFile>$(ProjectDir)\powrprof.def</ModuleDefinitionFile>
+      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release2|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -164,17 +206,24 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;DEFAULTHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;NDEBUG;DEFAULTHOOK_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
       <ExceptionHandling>Sync</ExceptionHandling>
-      <FloatingPointExceptions>true</FloatingPointExceptions>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT</AdditionalIncludeDirectories>
-      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <AdditionalIncludeDirectories>$(ProjectDir)\include\NT;$(ProjectDir)\libs\asmjit\src</AdditionalIncludeDirectories>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <BasicRuntimeChecks />
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -184,14 +233,13 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>$(ProjectDir)\powrprof.def</ModuleDefinitionFile>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
-      <AdditionalDependencies>Winmm.lib;ntdll.lib;dbghelp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;ntdll.lib;dbghelp.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="arxan.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="exceptions.cpp" />
-    <ClCompile Include="gamehooks.cpp" />
     <ClCompile Include="instrumentationCallbacks.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64assembler.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\arm\a64builder.cpp" />
@@ -252,6 +300,7 @@
     <ClCompile Include="libs\asmjit\src\asmjit\x86\x86instdb.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\x86\x86operand.cpp" />
     <ClCompile Include="libs\asmjit\src\asmjit\x86\x86rapass.cpp" />
+    <ClCompile Include="libs\loadlibrary\Loader.cpp" />
     <ClCompile Include="libs\minhook\src\buffer.c" />
     <ClCompile Include="libs\minhook\src\hde\hde32.c" />
     <ClCompile Include="libs\minhook\src\hde\hde64.c" />
@@ -259,6 +308,7 @@
     <ClCompile Include="libs\patterns\Hooking.Patterns.cpp" />
     <ClCompile Include="libs\minhook\src\trampoline.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="pluginloader.cpp" />
     <ClCompile Include="restorentdll.cpp" />
     <ClCompile Include="systemhooks.cpp" />
     <ClCompile Include="utils.cpp" />
@@ -269,9 +319,6 @@
   <ItemGroup>
     <ClInclude Include="arxan.h" />
     <ClInclude Include="exceptions.h" />
-    <ClInclude Include="gamehooks.h" />
-    <ClInclude Include="gamestructs.h" />
-    <ClInclude Include="gdll.h" />
     <ClInclude Include="instrumentationCallbacks.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\a64.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\arm.h" />
@@ -365,6 +412,7 @@
     <ClInclude Include="libs\asmjit\src\asmjit\x86\x86opcode_p.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\x86\x86operand.h" />
     <ClInclude Include="libs\asmjit\src\asmjit\x86\x86rapass_p.h" />
+    <ClInclude Include="libs\loadlibrary\Loader.h" />
     <ClInclude Include="libs\minhook\include\MinHook.h" />
     <ClInclude Include="libs\minhook\src\buffer.h" />
     <ClInclude Include="libs\minhook\src\hde\hde32.h" />
@@ -376,11 +424,11 @@
     <ClInclude Include="libs\minhook\src\trampoline.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="notes.h" />
+    <ClInclude Include="pluginloader.h" />
     <ClInclude Include="restorentdll.h" />
     <ClInclude Include="syscalls.h" />
     <ClInclude Include="systemhooks.h" />
     <ClInclude Include="utils.h" />
-    <ClInclude Include="winstructs.h" />
     <ClInclude Include="paths.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

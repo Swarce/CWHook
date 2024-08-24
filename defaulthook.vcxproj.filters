@@ -34,6 +34,9 @@
     <Filter Include="Source Files\asmjit\x86">
       <UniqueIdentifier>{1245105b-2210-4b4c-86d6-5b3b536f9808}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\loader">
+      <UniqueIdentifier>{9d31be5d-d98b-4bcb-b8f0-23663d7ba0bb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -252,11 +255,14 @@
     <ClCompile Include="arxan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="gamehooks.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="instrumentationCallbacks.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pluginloader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="libs\loadlibrary\Loader.cpp">
+      <Filter>Source Files\loader</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -287,16 +293,7 @@
     <ClInclude Include="libs\minhook\src\trampoline.h">
       <Filter>Source Files\minhook</Filter>
     </ClInclude>
-    <ClInclude Include="gamestructs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="winstructs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="notes.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="gdll.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="restorentdll.h">
@@ -593,9 +590,6 @@
     <ClInclude Include="arxan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="gamehooks.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="instrumentationCallbacks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -604,6 +598,12 @@
     </ClInclude>
     <ClInclude Include="syscalls.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pluginloader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="libs\loadlibrary\Loader.h">
+      <Filter>Source Files\loader</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
