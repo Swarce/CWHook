@@ -377,6 +377,9 @@ NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 	PVOID EaBuffer,
 	ULONG EaLength)
 {
+	OBJECT_ATTRIBUTES objAttributes = { 0 };
+	UNICODE_STRING unicodeString = { 0 };
+
 	wchar_t* fileName = ObjectAttributes->ObjectName->Buffer;
 
 	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\GDI32.dll") == 0)
@@ -928,8 +931,8 @@ void createInlineAsmStub()
 		memcpy(tempBuffer, asmjitResult, code.codeSize());
 		memcpy(currentStubOffset, tempBuffer, sizeof(uint8_t) * code.codeSize());
 
-		const int callInstructionBytes = inlineStubs[i].bufferSize;
-		const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+		size_t callInstructionBytes = inlineStubs[i].bufferSize;
+		size_t callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
 
 		DWORD old_protect{};
 		VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
@@ -965,7 +968,7 @@ void createInlineAsmStub()
 		// store location & bytes to check if arxan is removing our hooks
 		if (inlineStubs[i].type == intactSmall)
 		{
-			intactChecksumHook intactChecksum;
+			intactChecksumHook intactChecksum = {};
 			intactChecksum.functionAddress = (uint64_t*)functionAddress;
 			memcpy(intactChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * inlineStubs[i].bufferSize);
 			inlineStubs[i].buffer = intactChecksum.buffer;
@@ -974,7 +977,7 @@ void createInlineAsmStub()
 
 		if (inlineStubs[i].type == intactBig)
 		{
-			intactBigChecksumHook intactBigChecksum;
+			intactBigChecksumHook intactBigChecksum = {};
 			intactBigChecksum.functionAddress = (uint64_t*)functionAddress;
 			memcpy(intactBigChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * inlineStubs[i].bufferSize);
 			inlineStubs[i].buffer = intactBigChecksum.buffer;
@@ -983,7 +986,7 @@ void createInlineAsmStub()
 
 		if (inlineStubs[i].type == split)
 		{
-			splitChecksumHook splitChecksum;
+			splitChecksumHook splitChecksum = {};
 			splitChecksum.functionAddress = (uint64_t*)functionAddress;
 			memcpy(splitChecksum.buffer, jmpInstructionBuffer, sizeof(uint8_t) * inlineStubs[i].bufferSize);
 			inlineStubs[i].buffer = splitChecksum.buffer;
@@ -1195,8 +1198,8 @@ void createChecksumHealingStub()
 			memcpy(tempBuffer, asmjitResult, code.codeSize());
 			memcpy(currentStubOffset, tempBuffer, sizeof(uint8_t) * code.codeSize());
 
-			const int callInstructionBytes = healingLocations[type].length;
-			const int callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
+			size_t callInstructionBytes = healingLocations[type].length;
+			size_t callInstructionLength = sizeof(uint8_t) * callInstructionBytes;
 
 			DWORD old_protect{};
 			VirtualProtect(functionAddress, callInstructionLength, PAGE_EXECUTE_READWRITE, &old_protect);

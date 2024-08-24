@@ -80,6 +80,7 @@ GetSubMenu_t GetSubMenuOrig;
 
 std::vector<PVOID> VectoredExceptions;
 CONTEXT context = {};
+uint64_t ntdllSize = 0;
 
 bool GetThreadContextFunc(HANDLE thread, CONTEXT context)
 {
