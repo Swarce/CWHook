@@ -343,7 +343,7 @@ static MH_STATUS Freeze(PFROZEN_THREADS pThreads, UINT pos, UINT action)
             HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, pThreads->pItems[i]);
             if (hThread != NULL)
             {
-                SuspendThread(hThread);
+                //SuspendThread(hThread);
                 ProcessThreadIPs(hThread, pos, action);
                 CloseHandle(hThread);
             }
@@ -364,7 +364,7 @@ static VOID Unfreeze(PFROZEN_THREADS pThreads)
             HANDLE hThread = OpenThread(THREAD_ACCESS, FALSE, pThreads->pItems[i]);
             if (hThread != NULL)
             {
-                ResumeThread(hThread);
+                //ResumeThread(hThread);
                 CloseHandle(hThread);
             }
         }
@@ -372,6 +372,8 @@ static VOID Unfreeze(PFROZEN_THREADS pThreads)
         HeapFree(g_hHeap, 0, pThreads->pItems);
     }
 }
+
+BOOL setthisonetime = FALSE;
 
 //-------------------------------------------------------------------------
 static MH_STATUS EnableHookLL(UINT pos, BOOL enable)
@@ -724,6 +726,7 @@ static MH_STATUS EnableHook(LPVOID pTarget, BOOL enable)
                 {
                     FROZEN_THREADS threads;
                     status = Freeze(&threads, pos, ACTION_ENABLE);
+                    
                     if (status == MH_OK)
                     {
                         status = EnableHookLL(pos, enable);
