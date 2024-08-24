@@ -138,3 +138,30 @@ arxan on start up jmps to random ntdll function where syscall starts and jmps to
     ZwOpenKey
     ZwQueryValueKey
 */
+
+/*  
+    not really related to arxan but minhook can be a cause for a dll unloading to crash
+    since it doesnt handle when a call to suspendthread gives a "no access" error
+    uncommenting out suspendthread resumethread will allow for the process to unload and load the module without crashing
+*/
+
+/*
+    arxan modifies the LoadCount of the module that gets loaded into the game and sets it to -1 (0xFFFF)
+    which only should happen if the module is build statically like most windows api modules such as ntdll/win32u since
+    if those modules would get free'd (which shouldnt be possible) the program will crash
+
+    this prevents an user to unload modules
+*/
+
+
+
+/* TODO
+
+fetch syscall id's from ntdll so we dont have to hard define them in syscalls.h
+get path to plugin folder
+get path to loading folder
+get the size of ntdllSize
+
+
+
+*/
