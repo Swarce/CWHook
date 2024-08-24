@@ -26,8 +26,6 @@
 
 #include "libs/patterns/Hooking.Patterns.h"
 #include "libs/minhook/include/MinHook.h"
-#include "gamestructs.h"
-#include "winstructs.h"
 #include "restorentdll.h"
 #include "utils.h"
 #include "systemhooks.h"
@@ -54,6 +52,7 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 	uint64_t baseAddressEnd = baseAddressStart + sizeOfImage;
 
 	// check if our checksum hooks got overwritten
+	// we could probably ifdef this now but it's a good indicator to know if our checksum hooks still exist
 	{
 		for (int i=0; i < intactchecksumHooks.size(); i++)
 		{
@@ -362,9 +361,9 @@ void checkIfWIN32UGetsCalled()
 	__debugbreak();
 }
 
-OBJECT_ATTRIBUTES objAttributes = {};
-UNICODE_STRING unicodeString;
-
+// TODO: check if arxan cares if we even handle this case
+//#pragma optimize( "", off )
+/*
 NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 	ACCESS_MASK DesiredAccess,
 	POBJECT_ATTRIBUTES ObjectAttributes,
@@ -408,6 +407,8 @@ NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
 
 	return 0x0;
 }
+*/
+//#pragma optimize( "", on )
 
 void ntdllAsmStub()
 {
@@ -420,7 +421,7 @@ void ntdllAsmStub()
 	const size_t allocationSize = sizeof(uint8_t) * 128;
 	ntdllAsmStubLocation = allocate_somewhere_near(GetModuleHandle("ntdll.dll"), allocationSize);
 	memset(ntdllAsmStubLocation, 0x90, allocationSize);
-	printf("ntdlll stub location %llx\n", ntdllAsmStubLocation);
+	printf("ntdll stub location %llx\n", ntdllAsmStubLocation);
 
 	// assembly stub
 	static asmjit::JitRuntime runtime;
@@ -441,8 +442,6 @@ void ntdllAsmStub()
 	asmjit::Label QuerySystemInformation = a.newLabel();
 	asmjit::Label QuerySystemInformation_L1 = a.newLabel();
 	asmjit::Label QuerySystemInformation_L2 = a.newLabel();
-	asmjit::Label CreateFile = a.newLabel();
-	asmjit::Label CreateFile_L1 = a.newLabel();
 	asmjit::Label DEBUG = a.newLabel();
 
 	a.test(byte_ptr(0x7FFE0308), 1);
@@ -462,8 +461,8 @@ void ntdllAsmStub()
 	a.cmp(rax, QuerySystemInformationSysCall);	// NtQuerySystemInformationAddr
 	a.je(QuerySystemInformation);
 
-	a.cmp(rax, CreateFileSysCall);
-	a.je(CreateFile);
+	//a.cmp(rax, CreateFileSysCall);
+	//a.je(CreateFile);
 
 	a.bind(RegularSyscall);
 		a.syscall();
@@ -478,55 +477,6 @@ void ntdllAsmStub()
 	a.int3();
 	a.jmp(DEBUG);
 #endif
-
-	a.bind(CreateFile);
-		pushad64();
-
-		a.sub(rsp, 0x20 + 0x30 + 0x8);
-
-		// shift the entire content of the stack to our func call
-		for(int i=0; i <= 6; i++)
-		{
-			a.mov(rax, qword_ptr(rsp, 0xF8 + 0x8 + (0x8 * i))); 
-			a.mov(qword_ptr(rsp, 0x20 + (0x8 * i)), rax);
-		}
-
-		a.mov(r15, (uint64_t)(void*)ntdllCreateFile);
-		a.call(r15);
-
-		a.cmp(rax, 0x1337);
-		a.jne(CreateFile_L1);
-
-		// we modified the objectattributes (r8) register, store it in xmm register
-		a.movq(xmm15, qword_ptr(rsp, 0x10)); 
-
-	a.bind(CreateFile_L1);
-		a.add(rsp, 0x20 + 0x30 + 0x8);
-
-		popad64();
-
-		// compare if xmm register is 0 if not we swap xmm register with r8
-		a.push(rax);
-		a.movq(rax, xmm15);
-		a.cmp(rax, 0);
-		a.pop(rax);
-		a.je(RegularSyscall);
-
-		a.movq(xmm14, r8); // backup original objectattribute address
-		a.movq(r8, xmm15); // swap objectattribute with our own
-
-		a.syscall();
-
-		//a.movq(r8, xmm14);
-
-		// set xmm15 & xmm14 back to 0
-		a.push(rax);
-		a.mov(rax, 0);
-		a.movq(xmm15, rax);
-		a.movq(xmm14, rax);
-		a.pop(rax);
-
-		a.ret();
 
 	// rdi has the address location?
 	a.bind(QueryInformationProcess);
