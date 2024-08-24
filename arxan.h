@@ -10,4 +10,3 @@ int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint
 void createInlineAsmStub();
 void createChecksumHealingStub();
 void ntdllAsmStub();
-void win32uAsmStub();

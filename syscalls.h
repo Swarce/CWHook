@@ -19,3 +19,4 @@
 #define QueryInformationProcessSysCall 0x19
 #define QuerySystemInformationSysCall 0x36
 #define CreateFileSysCall 0x55
+#define AllocateVirtualMemorySysCall 0x18

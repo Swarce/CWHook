@@ -7,5 +7,7 @@
 #include <ntpsapi.h>
 #include <minidumpapiset.h>
 
+#define ResumeFlag 0x10000
+
 LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info);
 extern HANDLE exceptionHandle;

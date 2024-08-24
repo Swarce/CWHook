@@ -12,8 +12,6 @@
 #include <filesystem>
 
 #include "libs/minhook/include/MinHook.h"
-#include "gamestructs.h"
-#include "winstructs.h"
 
 void util_copy(void* place, const void* data, const size_t length)
 {

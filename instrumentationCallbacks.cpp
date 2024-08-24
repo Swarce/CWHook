@@ -94,7 +94,7 @@ void callbackFunc(CONTEXT* ctx) {
 
     auto return_address = reinterpret_cast<void*>(ctx->Rip);
     auto return_value = reinterpret_cast<void*>(ctx->Rax);
-    uint64_t offset_into_function;
+    uint64_t offset_into_function = 0;
 
     bool base_b = (ctx->Rip > baseAddrStart && ctx->Rip < baseAddrEnd);
     bool arxanStub_b = (ctx->Rip > arxanStubStartLocation && ctx->Rip < arxanStubEndLocation);

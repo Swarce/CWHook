@@ -23,29 +23,35 @@
 
 #include "libs/patterns/Hooking.Patterns.h"
 #include "libs/minhook/include/MinHook.h"
-#include "gamestructs.h"
-#include "winstructs.h"
 #include "restorentdll.h"
 #include "utils.h"
 #include "systemhooks.h"
 #include "exceptions.h"
 #include "arxan.h"
 #include "paths.h"
+#include "pluginloader.h"
 
 bool weAreDebugging = false;
 DWORD inputThreadId = -1;
 HANDLE inputHandle = nullptr;
-HANDLE ntdllFileHandle = nullptr;
-HANDLE ntdllOriginalFileHandle = nullptr;
-HANDLE win32uFileHandle = nullptr;
-HANDLE win32uOriginalFileHandle = nullptr;
-HANDLE gameHandle = nullptr;
-HANDLE debugThreadHandle = nullptr;
-bool hookedfunction = false;
-char* endofTextSectionAddr = nullptr;
 void* RtlRestoreContextAddr;
-uint64_t OffsetOfSetInfoFunc = 0;
-bool firstTimeNTDLLCreatedFalsePath = true;
+
+// ntdll hooks
+NtUserQueryWindow_t NtUserQueryWindowOrig;
+NtUserGetForegroundWindow_t NtUserGetForegroundWindowOrig;
+NtUserBuildHwndList_t NtUserBuildHwndListOrig;
+NtSetInformationProcess_t NtSetInformationProcessOrig;
+NtUserFindWindowEx_t NtUserFindWindowExOrig;
+NtUserWindowFromPoint_t NtUserWindowFromPointOrig;
+NtAllocateVirtualMemory_t NtAllocateVirtualMemoryOrig;
+NtMapViewOfSection_t NtMapViewOfSectionOrig;
+NtSetInformationJobObject_t NtSetInformationJobObjectOrig;
+NtUserGetClassName_t NtUserGetClassNameOrig;
+NtUserInternalGetWindowText_t NtUserInternalGetWindowTextOrig;
+
+// kernel32 hooks
+
+// kernelbase hooks
 
 GetWindowText_t GetWindowTextOrig;
 EnumWindowsOrig_t EnumWindowsOrig;
@@ -53,24 +59,14 @@ GetThreadContext_t GetThreadContextOrig;
 CreateThread_t CreateThreadOrig;
 AddVectoredExceptionHandler_t AddVectoredExceptionHandlerOrig;
 SetUnhandledExceptionFilter_t SetUnhandledExceptionFilterOrig;
-NtUserQueryWindow_t NtUserQueryWindowOrig;
-NtUserGetForegroundWindow_t NtUserGetForegroundWindowOrig;
-NtUserBuildHwndList_t NtUserBuildHwndListOrig;
-NtSetInformationProcess_t NtSetInformationProcessOrig;
 CheckRemoteDebuggerPresent_t CheckRemoteDebuggerPresentOrig;
 CreateMutexEx_t CreateMutexExOrig;
 SetWindowsHookEx_t SetWindowsHookExOrig;
 SetThreadContext_t SetThreadContextOrig;
-NtUserFindWindowEx_t NtUserFindWindowExOrig;
-NtUserWindowFromPoint_t NtUserWindowFromPointOrig;
 CreateWindowEx_t CreateWindowExOrig;
 RtlRestoreContext_t RtlRestoreContextOrig;
-NtAllocateVirtualMemory_t NtAllocateVirtualMemoryOrig;
-NtMapViewOfSection_t NtMapViewOfSectionOrig;
-NtSetInformationJobObject_t NtSetInformationJobObjectOrig;
-NtUserGetClassName_t NtUserGetClassNameOrig;
-NtUserInternalGetWindowText_t NtUserInternalGetWindowTextOrig;
-
+FreeLibrary_t FreeLibraryOrig;
+FreeLibraryAndExitThread_t FreeLibraryAndExitThreadOrig;
 GetWindowThreadProcessId_t GetWindowThreadProcessIdOrig;
 GetClassName_t GetClassNameOrig;
 EnumChildWindows_t EnumChildWindowsOrig;
@@ -140,17 +136,15 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 		static int counter = 0;
 		counter++;
 
-		/*
+		/* checksum counts for latest build supported by donetsk defcon
 			p 57
 			p 41
 			p 30
 		*/
-
 		static bool firstTime = true;
-		if (firstTime) // if (firstTime && counter == 4)
+		if (firstTime)
 		{
 			clock_t start_time = clock();
-			// TODO: enable this later
 			createInlineAsmStub();
 			createChecksumHealingStub();
 			
@@ -161,31 +155,18 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 			firstTime = false;
 		}
 
+		// Arxan does a startup checksum check routine that I didn't bother bypassing, 
+		// doesn't matter anyways since iirc none of the game's functions gets called anyways.
+		// 6 is just an arbitary number so that we create gameplay related hooks a little bit later.
+		// TODO: do loadlibrary in here for the plugins folder
 		if (counter == 6)
 		{
-			uint64_t baseAddr = (uint64_t)GetModuleHandle(nullptr);
+			DisableTlsCallbacks();
+			DisableKiUserApcDispatcherHook();
+			RestoreKernel32ThreadInitThunkFunction();
+			RestoreNtdllDbgFunctions();
 
-/*
-			if (MH_CreateHook((char*)(baseAddr + 0xb5a10d0), &Demo_OpenFileWrite, (LPVOID*)(&Demo_OpenFileWriteOrig)) != MH_OK) 
-				{ printf("hook didn't work\n"); }
-			if (MH_EnableHook((char*)(baseAddr + 0xb5a10d0)) != MH_OK) 
-				{ printf("hook didn't work\n"); }
-*/
-
-			disableTlsCallbacks();
-			// pmove offset 0x76041f0
-
-			// TODO: for our little module we will load later, modify some stuff from our player entity
-
-			// 7FF71B6A1DF3                 call    qword ptr [rsp+1AE0h]
-			// player entity state
-			//placeHardwareBP((char*)(baseAddr + 0x7FF72601DEB0 - StartOfBinary), 0, Condition::Execute);
-
-/*
-			placeHardwareBP((char*)(baseAddr + 0x7ff738c428a1 - StartOfBinary), 0, Condition::Write);
-			placeHardwareBP((char*)(baseAddr + 0x7ff736672212 - StartOfBinary), 1, Condition::Write);
-			placeHardwareBP((char*)(baseAddr + 0x7ff738e429da - StartOfBinary), 2, Condition::Write);
-*/
+			InitializePluginLoader();
 		}
 	}
 
@@ -400,6 +381,54 @@ PVOID AddVectoredExceptionHandlerFunc(ULONG First, PVECTORED_EXCEPTION_HANDLER H
 	return handler;
 }
 
+/*
+BOOL FreeLibraryFunc(HMODULE hLibModule)
+{
+	PLDR_DATA_TABLE_ENTRY moduleEntry;
+	NTSTATUS entryResult = LdrFindEntryForAddress(hLibModule, &moduleEntry);
+
+	if (entryResult == 0)
+	{
+		if (wcsstr(moduleEntry->FullDllName.Buffer, L"plugins") != nullptr)
+		{
+			printf("freelib called\n");
+
+			bool result = FreeLibraryOrig(hLibModule);
+			UnmapViewOfFile(hLibModule);
+			return result;
+		}
+	}
+
+	bool result = FreeLibraryOrig(hLibModule);
+	return result;
+}
+*/
+
+/*
+void FreeLibraryAndExitThreadFunc(HMODULE hLibModule, DWORD dwExitCode)
+{
+	PLDR_DATA_TABLE_ENTRY moduleEntry;
+	NTSTATUS entryResult = LdrFindEntryForAddress(hLibModule, &moduleEntry);
+
+	if (entryResult == 0)
+	{
+		if (wcsstr(moduleEntry->FullDllName.Buffer, L"plugins") != nullptr)
+		{
+			FreeLibraryOrig(hLibModule);
+			Sleep(1000);
+			UnmapViewOfFile(hLibModule);
+			Sleep(1000);
+
+			printf("unloaded plugin\n");
+			RtlExitUserThread(dwExitCode);
+			return;
+		}
+	}
+
+	FreeLibraryAndExitThreadOrig(hLibModule, dwExitCode);
+}
+*/
+
 LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilterFunc(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter)
 {
 	return 0;
@@ -410,7 +439,34 @@ void generalTlsCallbackFunction()
 	return;
 }
 
-void disableTlsCallbacks()
+void DisableKiUserApcDispatcherHook()
+{
+	void* KiUserApcDispatcherAddr = (void*)GetProcAddress(GetModuleHandle("ntdll.dll"), "KiUserApcDispatcher");
+	// TODO: pull the bytes before arxan decides to hook the apc dispatcher
+	// else we might cause crashes for other ntdll variants
+	uint8_t bytes[14] = {0x48, 0x8b, 0x4c, 0x24, 0x18, 0x48, 0x8b, 0xc1, 0x4c, 0x8b, 0xcc, 0x48, 0xc1, 0xf9};
+
+	DWORD old_protect{};
+	VirtualProtect(KiUserApcDispatcherAddr, sizeof(uint8_t) * 14, PAGE_EXECUTE_READWRITE, &old_protect);
+	memcpy(KiUserApcDispatcherAddr, bytes, sizeof(uint8_t) * 14);
+	VirtualProtect(KiUserApcDispatcherAddr, sizeof(uint8_t) * 14, old_protect, &old_protect);
+	FlushInstructionCache(GetCurrentProcess(), KiUserApcDispatcherAddr, sizeof(uint8_t) * 14);
+}
+
+void RestoreKernel32ThreadInitThunkFunction()
+{
+	// cold war removes the function ptr from ntdll Kernel32ThreadInitThunkFunction to its own, redirecting createremotethread
+	// does rdtsc checks which in turn makes it so that if the process is completely suspended, will crash on created threads
+	void* BaseInitThread = (void*)GetProcAddress(GetModuleHandle("ntdll.dll"), "RtlUserThreadStart");
+	void* BaseThreadInitThunk = (void*)GetProcAddress(GetModuleHandle("kernel32.dll"), "BaseThreadInitThunk");
+
+	PVOID RtlUserThreadStart = (PVOID)((DWORD64)BaseInitThread + 0x7);
+	DWORD64 RtlUserThreadStartFuncOffset = (UINT64)((PUCHAR)RtlUserThreadStart + *(PULONG)((PUCHAR)RtlUserThreadStart + 0x3) + 0x7);
+	uint64_t* basethreadinitptr = (uint64_t*)RtlUserThreadStartFuncOffset;
+	memcpy(basethreadinitptr, &BaseThreadInitThunk, sizeof(uint64_t));
+}
+
+void DisableTlsCallbacks()
 {
 	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
 	char* tlscallback_1 = reinterpret_cast<char*>(baseAddr + 0x6b9220);
@@ -438,6 +494,32 @@ void disableTlsCallbacks()
 	printf("disabled tls callbacks\n");
 }
 
+DWORD WINAPI ConsoleInput(LPVOID lpReserved)
+{
+	bool setHWBP = false;
+	while (true)
+	{
+		std::string input;
+		getline(std::cin, input);
+
+		if (setHWBP)
+		{
+			uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
+			uint64_t hwbpAddress = strtoll(input.c_str(), NULL, 16);
+			char* bpAddr1 = reinterpret_cast<char*>(baseAddr + hwbpAddress - StartOfBinary);
+			placeHardwareBP(bpAddr1, 3, Condition::Write);
+			setHWBP = false;
+		}
+
+		if (strcmp(input.c_str(), "b") == 0)
+		{
+			printf("set breakpoint\n");
+			setHWBP = true;
+		}
+	}
+	return 0;
+}
+
 void InitializeSystemHooks()
 {
 	void* GetThreadContextAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "GetThreadContext");
@@ -445,6 +527,8 @@ void InitializeSystemHooks()
 	void* CheckRemoteDebuggerPresentAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "CheckRemoteDebuggerPresent");
 	void* OutputDebugStringAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "OutputDebugStringA");
 	void* SetUnhandledExceptionFilterAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "SetUnhandledExceptionFilter");
+	void* FreeLibraryAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "FreeLibrary");
+	void* FreeLibraryAndExitThreadAddr = (void*)GetProcAddress(GetModuleHandle("kernelbase.dll"), "FreeLibraryAndExitThread");
 
 	void* AddVectoredExceptionHandlerAddr = (void*)GetProcAddress(GetModuleHandle("kernel32.dll"), "AddVectoredExceptionHandler");
 	void* CreateThreadAddr = (void*)GetProcAddress(GetModuleHandle("kernel32.dll"), "CreateThread");
@@ -477,7 +561,6 @@ void InitializeSystemHooks()
 	void* NtUserWindowFromDCAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserWindowFromDC");
 	void* NtUserGetClassNameAddr = (void*)GetProcAddress(GetModuleHandle("win32u.dll"), "NtUserGetClassName");
 
-
 	struct hook_t
 	{
 		void* addr;
@@ -502,6 +585,9 @@ void InitializeSystemHooks()
 		{SetUnhandledExceptionFilterAddr, &SetUnhandledExceptionFilterFunc, (LPVOID*)(&SetUnhandledExceptionFilterOrig)},
 		{NtUserGetForegroundWindowAddr, &NtUserGetForegroundWindowFunc, (LPVOID*)(&NtUserGetForegroundWindowOrig)},
 		{NtUserBuildHwndListAddr, &NtUserBuildHwndListFunc, (LPVOID*)(&NtUserBuildHwndListOrig)},
+
+		//{FreeLibraryAddr, &FreeLibraryFunc, (LPVOID*)(&FreeLibraryOrig)},
+		//{FreeLibraryAndExitThreadAddr, &FreeLibraryAndExitThreadFunc, (LPVOID*)(&FreeLibraryAndExitThreadOrig)},
 		
 		// might crash more frequent?
 		{NtUserQueryWindowAddr, &NtUserQueryWindowFunc, (LPVOID*)(&NtUserQueryWindowOrig)},
@@ -527,9 +613,9 @@ void InitializeSystemHooks()
 	for (int i=0; i < amountHooks; i++)
 	{
 		if (MH_CreateHook(hooks[i].addr, hooks[i].ourFunction, hooks[i].originalFunction) != MH_OK)
-			printf("hook didn't work\n");
+			printf("system hook %d didn't work\n", i);
 
 		if (MH_EnableHook(hooks[i].addr) != MH_OK)
-			printf("hook didn't work\n");
+			printf("system hook %d didn't work\n", i);
 	}
 }

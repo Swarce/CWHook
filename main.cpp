@@ -21,7 +21,6 @@
 #include "utils.h"
 #include "systemhooks.h"
 #include "exceptions.h"
-#include "gamehooks.h"
 #include "arxan.h"
 #include "instrumentationCallbacks.h"
 #include "paths.h"
@@ -32,6 +31,13 @@ char* baseFuncAddr = nullptr;
 int main()
 {
 	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
+
+	HANDLE hFile = CreateFile("C://Windows//System32//ntdll.dll", GENERIC_READ,
+		FILE_SHARE_READ, NULL, OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL, NULL);
+	LARGE_INTEGER size;
+	GetFileSizeEx(hFile, &size);
+	ntdllSize = 4096 * ceil(size.QuadPart / 4096.0f);
 
 	exceptionHandle = AddVectoredExceptionHandler(true, exceptionHandler);
 
@@ -50,21 +56,27 @@ int main()
 
 	RestoreNtdllDbgFunctions();
 	MH_Initialize();
-
 	InitializeSystemHooks();
 
 	logFile = fopen("log.txt", "w+");
 
-	char* NtQueryInformationThreadAddr = (char*)GetProcAddress(GetModuleHandle("ntdll.dll"), "NtAllocateVirtualMemory");
-	placeHardwareBP(NtQueryInformationThreadAddr + 0x12, 3, Condition::Execute);
+	//char* NtQueryInformationThreadAddr = (char*)GetProcAddress(GetModuleHandle("ntdll.dll"), "NtAllocateVirtualMemory");
+	//placeHardwareBP(NtQueryInformationThreadAddr + 0x12, 3, Condition::Execute);
 
 	// disable audio being turned on
+	/*
 	DWORD dwVolume;
 	if (waveOutGetVolume(NULL, &dwVolume) == MMSYSERR_NOERROR)
 		waveOutSetVolume(NULL, 0);
+	*/
+
+		/*
+	PWSTR path = 0;
+	SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_SIMPLE_IDLIST, NULL, &path);
+	std::wstring test(path);
+	test.append(L"test");
 
 	// remove cached files for isTrial to work
-
 	for (const auto& entry : std::filesystem::directory_iterator(configPath))
 	{
 		auto fileName = entry.path().filename();
@@ -73,18 +85,19 @@ int main()
 		if (wcscmp(fileName.c_str(), L"config.ini") != 0)
 			std::filesystem::remove(filePath);
 	}
+		*/
 
 	// remove crashdumps
-
+	/*
 	for (const auto& entry : std::filesystem::directory_iterator(crashPath))
 	{
 		auto filePath = entry.path();
 		std::filesystem::remove(filePath);
 	}
+	*/
 
 	mainThreadId = GetCurrentThreadId();
-
-	ntdllAsmStub();
+	//ntdllAsmStub();
 
 	// crashes the game after a while, only good if you want to know what syscalls get called from win32u
 	// initInstrumentation();

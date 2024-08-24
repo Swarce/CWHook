@@ -96,7 +96,7 @@ const WCHAR* BadWindowClassList[] =
 	L"tooltips_class32",
 };
 
-FILE* logFile;
+FILE* logFile = nullptr;
 bool suspendNewThreads = false;
 
 void FilterHwndList(HWND* phwndFirst, PULONG pcHwndNeeded)
@@ -397,7 +397,6 @@ void SleepAllThreadsBesidesMainThread()
 #if 0
 			if (counter == 0)
 			{
-				//gameHandle = currentThread;
 				counter++;
 				continue;
 			}
@@ -463,7 +462,7 @@ void SuspendAllThreads()
 	if (MH_DisableHook(MH_ALL_HOOKS) != MH_OK)
 		printf("couldnt remove all hooks\n");
 
-	disableTlsCallbacks();
+	DisableTlsCallbacks();
 
 	printf("tls callback removed\n");
 

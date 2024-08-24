@@ -16,12 +16,11 @@
 #include <asmjit/core/jitruntime.h>
 #include <asmjit/x86/x86assembler.h>
 
-#include "winstructs.h"
 #include "utils.h"
 #include "systemhooks.h"
 #include "arxan.h"
 #include "exceptions.h"
-#include "gamehooks.h"
+#include "syscalls.h"
 
 HANDLE exceptionHandle = nullptr;
 std::vector<int> syscalls;
@@ -58,6 +57,8 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 			static int counter = 0;
 			counter++;
+
+			printf("got called\n");
 
 			info->ContextRecord->EFlags |= ResumeFlag;
 			return EXCEPTION_CONTINUE_EXECUTION;
@@ -101,7 +102,7 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 		else if (info->ContextRecord->Dr6 & 0x8)
 		{
 
-			if (info->ContextRecord->Rax != 0x0018)
+			if (info->ContextRecord->Rax != AllocateVirtualMemorySysCall)
 			{
 				//printf("syscall %llx\n", info->ContextRecord->Rax);
 

@@ -17,6 +17,7 @@ extern DWORD inputThreadId;
 extern CONTEXT context;
 extern bool weAreDebugging;
 extern std::vector<PVOID> VectoredExceptions;
+extern uint64_t ntdllSize;
 
 typedef enum _WINDOWINFOCLASS {
 	WindowProcess,
@@ -47,8 +48,9 @@ typedef int(__stdcall* NtUserGetClassName_t)(HWND hwnd, BOOL real, UNICODE_STRIN
 extern NtUserGetClassName_t NtUserGetClassNameOrig;
 
 void InitializeSystemHooks();
-void disableTlsCallbacks();
-
+void DisableTlsCallbacks();
+void DisableKiUserApcDispatcherHook();
+void RestoreKernel32ThreadInitThunkFunction();
 
 typedef HWND(__stdcall* CreateWindowEx_t)(DWORD     dwExStyle,
 	LPCSTR    lpClassName,
@@ -64,30 +66,20 @@ typedef HWND(__stdcall* CreateWindowEx_t)(DWORD     dwExStyle,
 	LPVOID    lpParam);
 
 typedef int(__stdcall* GetWindowText_t)(HWND hWnd, LPSTR lpString, int nMaxCount);
-
+typedef bool(__stdcall* FreeLibrary_t)(HMODULE hLibModule);
+typedef void(__stdcall* FreeLibraryAndExitThread_t)(HMODULE hLibModule, DWORD dwExitCode);
 typedef HWND(__stdcall* NtUserFindWindowEx_t)(HWND hwndParent,HWND hwndChildAfter, PUNICODE_STRING ucClassName, PUNICODE_STRING  ucWindowName);
-
 typedef HWND(__stdcall* NtUserWindowFromPoint_t)(LONG X, LONG Y);
-
 typedef BOOL(__stdcall* EnumWindowsOrig_t)(WNDENUMPROC lpEnumFunc, LPARAM lParam);
-
 typedef int(__stdcall* GetThreadContext_t)(HANDLE hThread, CONTEXT* lpContext);
 
 typedef HANDLE(__stdcall* CreateThread_t)(LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
-
 typedef PVOID(__stdcall* AddVectoredExceptionHandler_t)(ULONG First, PVECTORED_EXCEPTION_HANDLER Handler);
-
 typedef LPTOP_LEVEL_EXCEPTION_FILTER(__stdcall* SetUnhandledExceptionFilter_t)(LPTOP_LEVEL_EXCEPTION_FILTER lpTopLevelExceptionFilter);
-
-
 typedef HWND(__stdcall* NtUserGetForegroundWindow_t)();
-
 typedef NTSTATUS(__stdcall* NtUserBuildHwndList_t)(HDESK hDesk, HWND hWndNext, BOOL EnumChildren, BOOL RemoveImmersive, DWORD ThreadID, UINT Max, HWND* List, PULONG Cnt);
-
 typedef NTSTATUS(__stdcall* NtSetInformationProcess_t)(HANDLE ProcessHandle, PROCESSINFOCLASS ProcessInformationClass, PVOID ProcessInformation, ULONG ProcessInformationLength);
-
 typedef NTSTATUS(__stdcall* NtQuerySystemInformation_t)(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
-
 typedef BOOL(__stdcall* CheckRemoteDebuggerPresent_t)(HANDLE hProcess, PBOOL pbDebuggerPresent);
 
 typedef DWORD(__stdcall* GetWindowThreadProcessId_t)(HWND hWnd, LPDWORD lpdwProcessId);
