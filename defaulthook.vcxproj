@@ -310,6 +310,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pluginloader.cpp" />
     <ClCompile Include="restorentdll.cpp" />
+    <ClCompile Include="syscalls.cpp" />
     <ClCompile Include="systemhooks.cpp" />
     <ClCompile Include="utils.cpp" />
   </ItemGroup>

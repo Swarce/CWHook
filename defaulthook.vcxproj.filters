@@ -264,6 +264,9 @@
     <ClCompile Include="libs\loadlibrary\Loader.cpp">
       <Filter>Source Files\loader</Filter>
     </ClCompile>
+    <ClCompile Include="syscalls.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="main.h">
