@@ -1195,3 +1195,165 @@ void createChecksumHealingStub()
 		}
 	}
 }
+
+// Offsets found by applying hwbp's on ntdll dbg functions
+ntdllDbgLocations locations[] = {																 // 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F
+	{"DbgBreakPoint",						(void*)0x1BFA100E, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUserBreakPoint",					(void*)0x1E529177, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiConnectToDbg",					(void*)0x07694928, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiContinue",						(void*)0x1EA8F9BA, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiConvertStateChangeStructure",	(void*)0x1DBD8612, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiDebugActiveProcess",				(void*)0x1DFB2F44, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiGetThreadDebugObject",			(void*)0x1BD3FBF2, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiIssueRemoteBreakin",				(void*)0x1DB74F0B, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiRemoteBreakin",					(void*)0x1CB7AFD3, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiSetThreadDebugObject",			(void*)0x1BD63117, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiStopDebugging",					(void*)0x1BDB3908, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgUiWaitStateChange",				(void*)0x1BF02D1B, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgPrintReturnControlC",				(void*)0x05E9DFE8, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+	{"DbgPrompt",							(void*)0x1D24ABA6, {0xFF, 0x25, 0x00, 0x00, 0x00, 0x00, 0xA0, 0xE0, 0x15, 0xB1, 0xFA, 0x7F, 0x00, 0x00}},
+};
+
+void ReplaceNtdllStackWithOurOwn(uint64_t addr, uint64_t locationCount)
+{
+	uint64_t addressToReplace = *(uint64_t*)(char*)(addr - 0x8);
+	uint64_t* addressReplace = (uint64_t*)addr;
+
+	// we have to get the address location to exitprocess correctly or we will crash
+	uint64_t kernel32ExitProcessAddress = (uint64_t)GetProcAddress(GetModuleHandle("KERNEL32.dll"), "ExitProcess");
+	memcpy((char*)locations[locationCount].patchedByArxanBuffer + 6, &kernel32ExitProcessAddress, sizeof(uint64_t));
+
+	int counter = 0;
+	for (int i = 0; i < INT_MAX; i++)
+	{
+		addressReplace++;
+		uint64_t addressResult = *(uint64_t*)addressReplace;
+
+		if (addressResult == addressToReplace)
+		{
+			*addressReplace = (uint64_t)locations[locationCount].patchedByArxanBuffer;
+			counter++;
+
+			// there are 2 pointers that point to the ntdll dbg locations we nopped out
+			// we replace those 2 pointers with our own location to satisfy arxan so that the game doesnt crash
+			if (counter == 2)
+				return;
+		}
+	}
+}
+
+void RemoveNtdllChecksumChecks()
+{
+	void* baseModule = GetModuleHandle(nullptr);
+
+	const size_t allocationSize = sizeof(uint8_t) * 0x100 * 1000;
+	LPVOID healingStubLocation = allocate_somewhere_near(GetModuleHandle(nullptr), allocationSize);
+	memset(healingStubLocation, 0x90, allocationSize);
+
+	// avoid stub generation collision
+	char* previousStubOffset = nullptr;
+	// for jmp distance calculation
+	char* currentStubOffset = nullptr;
+
+	size_t amountOfLocations = sizeof(locations) / sizeof(ntdllDbgLocations);
+	for (uint64_t i = 0; i < amountOfLocations; i++)
+	{
+		void* functionAddress = (char*)locations[i].addrLocation + (uint64_t)baseModule;
+
+		// movzx   eax, byte ptr [rax]		0F B6 00
+		// jmp     loc_7FF71B61F9FA			E9 80 EC D3 E3
+		// 0F B6 00 E9 42 F5 BC E4 = 8 bytes
+		const uint64_t instructionsInBytes = 0x8;
+
+		int32_t jumpDistance = 0;
+		uint64_t locationToJump;
+
+		// we don't know the previous offset yet
+		if (currentStubOffset == nullptr)
+			currentStubOffset = (char*)healingStubLocation;
+
+		if (previousStubOffset != nullptr)
+			currentStubOffset = previousStubOffset;
+
+		memcpy(&jumpDistance, (char*)functionAddress + 4, 4); // ptr after 0xE9
+		locationToJump = jumpDistance + instructionsInBytes + (uint64_t)functionAddress;
+
+		static asmjit::JitRuntime runtime;
+		asmjit::CodeHolder code;
+		code.init(runtime.environment());
+
+		using namespace asmjit::x86;
+		Assembler a(&code);
+
+		asmjit::Label DEBUG = a.newLabel();
+
+		a.movq(xmm15, rsp);
+		pushad64();
+		a.sub(rsp, 0x20);
+		a.movq(rcx, xmm15);
+		a.mov(rdx, i);
+		a.call(ReplaceNtdllStackWithOurOwn);
+		a.add(rsp, 0x20);
+		popad64();
+		a.push(rax);
+		a.mov(rax, 0);
+		a.movq(xmm15, rax);
+		a.pop(rax);
+
+		uint64_t patchedBuffer = (uint64_t)locations[i].patchedByArxanBuffer;
+		a.mov(rax, patchedBuffer);
+		a.mov(rcx, patchedBuffer);
+		a.movzx(eax, byte_ptr(rax));
+		a.jmp(locationToJump);
+
+		void* asmjitResult = nullptr;
+		runtime.add(&asmjitResult, &code);
+
+		// copy over the content to the stub
+		uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());
+		memcpy(tempBuffer, asmjitResult, code.codeSize());
+		memcpy(currentStubOffset, tempBuffer, sizeof(uint8_t) * code.codeSize());
+
+		DWORD old_protect{};
+		size_t instructionLength = 0x8;
+
+		VirtualProtect(functionAddress, instructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memset(functionAddress, 0x90, instructionLength);
+		VirtualProtect(functionAddress, instructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, instructionLength);
+
+		uint64_t jmpDistance = (uint64_t)currentStubOffset - (uint64_t)functionAddress - 5;
+		uint8_t* jmpInstructionBuffer = (uint8_t*)malloc(sizeof(uint8_t) * instructionLength);
+		memset(jmpInstructionBuffer, 0x90, instructionLength);
+			
+		// E8 cd CALL rel32  Call near, relative, displacement relative to next instruction
+		jmpInstructionBuffer[0] = 0xE9;
+		jmpInstructionBuffer[1] = (jmpDistance >> (0 * 8));
+		jmpInstructionBuffer[2] = (jmpDistance >> (1 * 8));
+		jmpInstructionBuffer[3] = (jmpDistance >> (2 * 8));
+		jmpInstructionBuffer[4] = (jmpDistance >> (3 * 8));
+
+		VirtualProtect(functionAddress, instructionLength, PAGE_EXECUTE_READWRITE, &old_protect);
+		memcpy(functionAddress, jmpInstructionBuffer, instructionLength);
+		VirtualProtect(functionAddress, instructionLength, old_protect, &old_protect);
+		FlushInstructionCache(GetCurrentProcess(), functionAddress, instructionLength);
+
+		previousStubOffset = currentStubOffset + sizeof(uint8_t) * code.codeSize() + 0x8;
+	}
+
+	printf("done applying ntdll\n");
+}
+
+void DbgRemove()
+{
+	bool forceDebuggedNum = false;
+	bool setOneTime = false;
+	while (true)
+	{
+		auto* const peb = reinterpret_cast<PPEB>(__readgsqword(0x60));
+		peb->BeingDebugged = 0x8F; // this could end up getting the game to crash cause of arxan
+
+		RestoreNtdllDbgFunctions();
+		Sleep(100);
+	}
+}

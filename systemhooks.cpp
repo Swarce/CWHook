@@ -130,8 +130,9 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 	ULONG Protect)
 {
 	NTSTATUS result = NtAllocateVirtualMemoryOrig(ProcessHandle,BaseAddress,ZeroBits,RegionSize,AllocationType,Protect);
+	static bool bInit = false;
 
-	if (Protect & PAGE_EXECUTE_READWRITE && *(SIZE_T*)RegionSize == ntdllSize)
+	if (Protect & PAGE_EXECUTE_READWRITE && *(SIZE_T*)RegionSize == ntdllSize && !bInit)
 	{
 		static int counter = 0;
 		counter++;
@@ -164,9 +165,13 @@ NTSTATUS NtAllocateVirtualMemoryFunc(HANDLE ProcessHandle,
 			DisableTlsCallbacks();
 			DisableKiUserApcDispatcherHook();
 			RestoreKernel32ThreadInitThunkFunction();
+			RemoveNtdllChecksumChecks();
 			RestoreNtdllDbgFunctions();
 
 			InitializePluginLoader();
+			CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)DbgRemove, NULL, NULL, NULL);
+
+			bInit = true;
 		}
 	}
 
