@@ -42,7 +42,7 @@ LPVOID ntdllAsmStubLocation;
 inlineAsmStub* inlineStubs = nullptr;
 size_t stubCounter = 0;
 
-int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
+int FixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg)
 {
 	// get size of image from codcw
 	uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
@@ -286,12 +286,6 @@ NTSTATUS ntdllSyscallCreateThreadEx(PHANDLE ThreadHandle, NTSTATUS syscallResult
 	return syscallResult;
 }
 
-void ntdllSyscallCreateThread()
-{
-	// TODO: if this gets called we would need to do setthreadcontext
-	printf("thread created inside\n");
-}
-
 void ntdllQueryInformationProcess(PROCESSINFOCLASS ProcessInformationClass, PVOID ProcessInformation)
 {
 	switch(ProcessInformationClass)
@@ -349,68 +343,15 @@ void ntdllQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInformationClass
 		case SystemExtendedHandleInformation:
 			printf("\nchecked for handle information\n");
 			break;
+		case SystemObjectInformation:
+			printf("checked for object information\n");
+			break;
 		default:
 			break;
 	}
 }
 
-void checkIfWIN32UGetsCalled()
-{
-	printf("got called!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-	SuspendAllThreads();
-	__debugbreak();
-}
-
-// TODO: check if arxan cares if we even handle this case
-//#pragma optimize( "", off )
-/*
-NTSTATUS ntdllCreateFile(PHANDLE FileHandle,
-	ACCESS_MASK DesiredAccess,
-	POBJECT_ATTRIBUTES ObjectAttributes,
-	PIO_STATUS_BLOCK IoStatusBlock,
-	PLARGE_INTEGER AllocationSize,
-	ULONG FileAttributes,
-	ULONG ShareAccess,
-	ULONG CreateDisposition,
-	ULONG CreateOptions,
-	PVOID EaBuffer,
-	ULONG EaLength)
-{
-	OBJECT_ATTRIBUTES objAttributes = { 0 };
-	UNICODE_STRING unicodeString = { 0 };
-
-	wchar_t* fileName = ObjectAttributes->ObjectName->Buffer;
-
-	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\GDI32.dll") == 0)
-	{
-		RtlInitUnicodeString(&unicodeString, win32u_dir);
-		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
-		ObjectAttributes = &objAttributes;
-		return 0x1337;
-	}
-
-	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\USER32.dll") == 0)
-	{
-		RtlInitUnicodeString(&unicodeString, win32u_dir);
-		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
-		ObjectAttributes = &objAttributes;
-		return 0x1337;
-	}
-
-	if (wcscmp(fileName, L"\\??\\C:\\Windows\\System32\\win32u.dll") == 0)
-	{
-		RtlInitUnicodeString(&unicodeString, win32u_dir);
-		InitializeObjectAttributes(&objAttributes, &unicodeString, OBJ_CASE_INSENSITIVE, 0, NULL);
-		ObjectAttributes = &objAttributes;
-		return 0x1337;
-	}
-
-	return 0x0;
-}
-*/
-//#pragma optimize( "", on )
-
-void ntdllAsmStub()
+void NtdllAsmStub()
 {
 	hook::pattern syscallLocations = hook::module_pattern(GetModuleHandle("ntdll.dll"), "4C 8B D1 ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? 0F 05");
 	size_t syscallCount = syscallLocations.size();
@@ -699,7 +640,7 @@ void ntdllAsmStub()
 	//printf("done\n");
 }
 
-void createInlineAsmStub()
+void CreateInlineAsmStub()
 {
 	hook::pattern locationsIntact = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 45 ? FF");
 	hook::pattern locationsIntactBig = hook::module_pattern(GetModuleHandle(nullptr), "89 04 8A 83 85");
@@ -840,7 +781,7 @@ void createInlineAsmStub()
 		else
 			a.mov(asmjit::x86::r9, instructionBufferJmpDistance);	// incase we mess up a split checksum
 
-		a.mov(asmjit::x86::rax, (uint64_t)(void*)fixChecksum);
+		a.mov(asmjit::x86::rax, (uint64_t)(void*)FixChecksum);
 		a.call(asmjit::x86::rax);
 		a.add(asmjit::x86::rsp, 0x8*4); // so that r12-r15 registers dont get corrupt
 
@@ -984,13 +925,7 @@ bool arxanHealingChecksum(uint64_t rbp)
 	return false;
 }
 
-struct checksumHealingLocation
-{
-	hook::pattern checksumPattern;
-	size_t length;
-};
-
-void createChecksumHealingStub()
+void CreateChecksumHealingStub()
 {
 	void* baseModule = GetModuleHandle(nullptr);
 

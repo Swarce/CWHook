@@ -6,9 +6,21 @@
 
 extern LPVOID ntdllAsmStubLocation;
 
-int fixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg);
-void createInlineAsmStub();
-void createChecksumHealingStub();
-void ntdllAsmStub();
+int FixChecksum(uint64_t rbpOffset, uint64_t ptrOffset, uint64_t* ptrStack, uint32_t jmpInstructionDistance, uint32_t calculatedChecksumFromArg);
+void CreateInlineAsmStub();
+void CreateChecksumHealingStub();
+void NtdllAsmStub();
 void RemoveNtdllChecksumChecks();
 void DbgRemove();
+
+struct ntdllDbgLocations {
+	const char* functionName;
+	void* addrLocation;
+	uint8_t patchedByArxanBuffer[14];
+};
+
+struct checksumHealingLocation
+{
+	hook::pattern checksumPattern;
+	size_t length;
+};

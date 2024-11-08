@@ -25,6 +25,7 @@
 HANDLE exceptionHandle = nullptr;
 std::vector<int> syscalls;
 
+#pragma optimize("", off)
 LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 {
 	if (info->ExceptionRecord->ExceptionCode == EXCEPTION_BREAKPOINT)
@@ -58,12 +59,14 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			static int counter = 0;
 			counter++;
 
-			printf("got called\n");
+			printf("bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fprintf(logFile, "bp1: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fflush(logFile);
 
-			info->ContextRecord->EFlags |= ResumeFlag;
-			return EXCEPTION_CONTINUE_EXECUTION;
+			printf("loc %llx\n", info->ContextRecord->Rax);
 		}
-		else if (info->ContextRecord->Dr6 & 0x2)
+		
+		if (info->ContextRecord->Dr6 & 0x2)
 		{
 			// get size of image from codcw
 			uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
@@ -75,16 +78,14 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			static int counter = 0;
 			counter++;
 
-/*
 			printf("bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
 			fprintf(logFile, "bp2: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
 			fflush(logFile);
-*/
 
-			info->ContextRecord->EFlags |= ResumeFlag;
-			return EXCEPTION_CONTINUE_EXECUTION;
+			printf("loc %llx\n", info->ContextRecord->Rax);
 		}
-		else if (info->ContextRecord->Dr6 & 0x4)
+		
+		if (info->ContextRecord->Dr6 & 0x4)
 		{
 			// get size of image from codcw
 			uint64_t baseAddressStart = (uint64_t)GetModuleHandle(nullptr);
@@ -96,25 +97,23 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 			static int counter = 0;
 			counter++;
 
-			info->ContextRecord->EFlags |= ResumeFlag;
-			return EXCEPTION_CONTINUE_EXECUTION;
-		}
-		else if (info->ContextRecord->Dr6 & 0x8)
-		{
+			printf("bp3: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fprintf(logFile, "bp3: %llx %llx %d\n", exceptionAddr, idaExceptionAddr, counter);
+			fflush(logFile);
 
+			printf("loc %llx\n", info->ContextRecord->Rax);
+		}
+		
+		if (info->ContextRecord->Dr6 & 0x8)
+		{
 			if (info->ContextRecord->Rax != AllocateVirtualMemorySysCall)
 			{
 				//printf("syscall %llx\n", info->ContextRecord->Rax);
-
 				info->ContextRecord->Rip = (uint64_t)ntdllAsmStubLocation;
-				info->ContextRecord->EFlags |= ResumeFlag;
-				return EXCEPTION_CONTINUE_EXECUTION;
 			}
-
-			info->ContextRecord->EFlags |= ResumeFlag;
-			return EXCEPTION_CONTINUE_EXECUTION;
 		}
 
+		info->ContextRecord->EFlags |= ResumeFlag;
 		return EXCEPTION_CONTINUE_EXECUTION;
 	}
 
@@ -151,3 +150,4 @@ LONG WINAPI exceptionHandler(const LPEXCEPTION_POINTERS info)
 
 	return EXCEPTION_CONTINUE_SEARCH;
 }
+#pragma optimize("", on)

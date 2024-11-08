@@ -36,17 +36,17 @@ std::string loadedPathString;
 
 void directoryWatcher()
 {
-/*
-	const char* path = "D://Games//BOCWLatest//plugins//";
+	std::filesystem::path currentPath = std::filesystem::current_path();
+	std::string currentPathString(currentPath.generic_string());
 
-	HANDLE file = CreateFile(path,
-		FILE_LIST_DIRECTORY,
-		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-		NULL,
-		OPEN_EXISTING,
-		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
-		NULL);
-*/
+	std::string pluginPathString = currentPathString;
+	pluginPathString.append("/plugins");
+
+	std::string loadedPathString = currentPathString;
+	loadedPathString.append("/loaded");
+
+	printf("init plugin path %s\n", pluginPathString.c_str());
+	printf("init loaded path %s\n", loadedPathString.c_str());
 	
 	HANDLE file = CreateFile(pluginPathString.c_str(),
 		FILE_LIST_DIRECTORY,
@@ -164,6 +164,12 @@ void InitializePluginLoader()
 	std::string loadedPathString = currentPathString;
 	loadedPathString.append("/loaded");
 
+	if (!std::filesystem::is_directory(pluginPathString))
+		std::filesystem::create_directory(pluginPathString);
+
+	if (!std::filesystem::is_directory(loadedPathString))
+		std::filesystem::create_directory(loadedPathString);
+
 	// clean up loaded plugin folder
 	for (const auto& entry : std::filesystem::directory_iterator(loadedPathString))
 	{
@@ -195,7 +201,9 @@ void InitializePluginLoader()
 
 			if (!lib)
 			{
-				printf("couldn't load plugin");
+				printf("couldn't load plugin\n");
+				printf("error: %s\n", GetLastErrorAsString().c_str());
+
 				continue;
 			}
 
@@ -209,7 +217,6 @@ void InitializePluginLoader()
 			currentLoadedPlugins.push_back({ filePath.filename(), filePath, lib });
 		}
 	}
-
 	
-	HANDLE thread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)directoryWatcher, NULL, NULL, NULL);
+	CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)directoryWatcher, NULL, NULL, NULL);
 }

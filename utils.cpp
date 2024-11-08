@@ -490,13 +490,11 @@ void SuspendAllThreads()
 
 	printf("attach debugger\n");
 	
-	// while (true) { Sleep(100); __debugbreak(); }
 	while (!IsDebuggerPresent()) {
 		Sleep(100);
 	}
-	
-	//assert(0);
-	//printf("running...\n");
+
+	printf("running...\n");
 }
 
 void placeHardwareBP(void* addr, int count, Condition condition)

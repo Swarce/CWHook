@@ -99,7 +99,7 @@ int main()
 	*/
 
 	mainThreadId = GetCurrentThreadId();
-	//ntdllAsmStub();
+	NtdllAsmStub();
 
 	// crashes the game after a while, only good if you want to know what syscalls get called from win32u
 	// initInstrumentation();
