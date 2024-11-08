@@ -1,8 +1,9 @@
 #pragma once
-#include <stdint.h>
-
 #define PHNT_VERSION PHNT_WIN10_22H2
 #include <phnt_windows.h>
+
+#include <stdint.h>
+#include "libs/patterns/Hooking.Patterns.h"
 
 extern LPVOID ntdllAsmStubLocation;
 

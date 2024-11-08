@@ -26,9 +26,6 @@
 #include "paths.h"
 #include "syscalls.h"
 
-int mainThreadId = 0;
-char* baseFuncAddr = nullptr;
-
 int main()
 {
 	uint64_t baseAddr = reinterpret_cast<uint64_t>(GetModuleHandle(nullptr));
@@ -62,47 +59,20 @@ int main()
 
 	logFile = fopen("log.txt", "w+");
 
-	//char* NtQueryInformationThreadAddr = (char*)GetProcAddress(GetModuleHandle("ntdll.dll"), "NtAllocateVirtualMemory");
-	//placeHardwareBP(NtQueryInformationThreadAddr + 0x12, 3, Condition::Execute);
-
 	// disable audio being turned on
-	/*
 	DWORD dwVolume;
 	if (waveOutGetVolume(NULL, &dwVolume) == MMSYSERR_NOERROR)
 		waveOutSetVolume(NULL, 0);
-	*/
 
-		/*
-	PWSTR path = 0;
-	SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_SIMPLE_IDLIST, NULL, &path);
-	std::wstring test(path);
-	test.append(L"test");
+	HMODULE moduleNtdll = GetModuleHandle("ntdll.dll");
 
-	// remove cached files for isTrial to work
-	for (const auto& entry : std::filesystem::directory_iterator(configPath))
-	{
-		auto fileName = entry.path().filename();
-		auto filePath = entry.path();
+	placeHardwareBP((char*)GetProcAddress(moduleNtdll, "NtAllocateVirtualMemory")+0x12, 3, Condition::Execute);
 
-		if (wcscmp(fileName.c_str(), L"config.ini") != 0)
-			std::filesystem::remove(filePath);
-	}
-		*/
-
-	// remove crashdumps
-	/*
-	for (const auto& entry : std::filesystem::directory_iterator(crashPath))
-	{
-		auto filePath = entry.path();
-		std::filesystem::remove(filePath);
-	}
-	*/
-
-	mainThreadId = GetCurrentThreadId();
+	// arxan applies checksum checks & healing to INT2D
 	NtdllAsmStub();
 
-	// crashes the game after a while, only good if you want to know what syscalls get called from win32u
+	// crashes the game after a while, only good if you want to know what syscalls get called from win32u & friends
 	// initInstrumentation();
-	
+
 	return 0;
 }
