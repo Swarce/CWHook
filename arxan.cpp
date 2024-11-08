@@ -435,8 +435,9 @@ void ntdllAsmStub()
 	asmjit::Label SetInformation = a.newLabel();
 	asmjit::Label QueryInformation = a.newLabel();
 	asmjit::Label CreateThreadEx = a.newLabel();
-	asmjit::Label CreateThread = a.newLabel();
 	asmjit::Label RegularSyscall = a.newLabel();
+	asmjit::Label NtQueryObject = a.newLabel();
+	asmjit::Label NtQueryObject_L1 = a.newLabel();
 	asmjit::Label QueryInformationProcess = a.newLabel();
 	asmjit::Label QueryInformationProcess_L1 = a.newLabel();
 	asmjit::Label QuerySystemInformation = a.newLabel();
@@ -451,18 +452,15 @@ void ntdllAsmStub()
 	a.je(SetInformation);
 	a.cmp(rax, QueryInformationSysCall);
 	a.je(QueryInformation);
-	a.cmp(rax, CreateThreadSysCall);
-	a.je(CreateThread);
 	a.cmp(rax, CreateThreadExSysCall);
 	a.je(CreateThreadEx);
+	a.cmp(rax, NtQueryObjectSysCall);
+	a.je(NtQueryObject);
 
-	a.cmp(rax, QueryInformationProcessSysCall);	// NtQueryInformationProcessAddr
+	a.cmp(rax, QueryInformationProcessSysCall);
 	a.je(QueryInformationProcess);
-	a.cmp(rax, QuerySystemInformationSysCall);	// NtQuerySystemInformationAddr
+	a.cmp(rax, QuerySystemInformationSysCall);
 	a.je(QuerySystemInformation);
-
-	//a.cmp(rax, CreateFileSysCall);
-	//a.je(CreateFile);
 
 	a.bind(RegularSyscall);
 		a.syscall();
@@ -537,6 +535,8 @@ void ntdllAsmStub()
 		a.cmp(rcx, SystemHandleInformation);
 		a.je(QuerySystemInformation_L1);
 		a.cmp(rcx, SystemExtendedHandleInformation);
+		a.je(QuerySystemInformation_L1);
+		a.cmp(rcx, SystemObjectInformation);
 		a.je(QuerySystemInformation_L1);
 		// else do regular syscall
 		a.jmp(RegularSyscall);
@@ -623,15 +623,27 @@ void ntdllAsmStub()
 		a.add(rsp, 0x20);
 		a.ret();
 
-	a.bind(CreateThread);
-		a.sub(rsp, 0x20);
-		a.call(ntdllSyscallCreateThread);
-		a.add(rsp, 0x20);
+	a.bind(NtQueryObject);
+		a.cmp(rdx, ObjectBasicInformation);
+		a.je(NtQueryObject_L1);
+		a.cmp(rdx, ObjectNameInformation);
+		a.je(NtQueryObject_L1);
+		a.cmp(rdx, ObjectTypeInformation);
+		a.je(NtQueryObject_L1);
+		a.cmp(rdx, ObjectTypesInformation);
+		a.je(NtQueryObject_L1);
+	
 		a.syscall();
 		a.ret();
 
+	a.bind(NtQueryObject_L1);
+		a.mov(rax, 0xC0000005);
+		a.ret();
+
+
 	void* asmjitResult = nullptr;
 	runtime.add(&asmjitResult, &code);
+
 
 	// copy over the content to the stub
 	uint8_t* tempBuffer = (uint8_t*)malloc(sizeof(uint8_t) * code.codeSize());

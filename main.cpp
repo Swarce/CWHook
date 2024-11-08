@@ -24,6 +24,7 @@
 #include "arxan.h"
 #include "instrumentationCallbacks.h"
 #include "paths.h"
+#include "syscalls.h"
 
 int mainThreadId = 0;
 char* baseFuncAddr = nullptr;
@@ -54,6 +55,7 @@ int main()
 	//inputHandle = CreateThread(nullptr, 0, ConsoleInput, module, 0, &inputThreadId);
 	//printf("inputThreadId: %llx\n", inputThreadId);
 
+	SetSyscallsFromNtdll();
 	RestoreNtdllDbgFunctions();
 	MH_Initialize();
 	InitializeSystemHooks();
