@@ -16,6 +16,16 @@ Ntdll NtSetInformationThread and other functions get inserted into the chunk.
 NtSetInformationThread gets called from the chunk to hide the main thread from debuggers.
 
 Hooks KiUserApcDispatcher
+
+Creates numerous exceptions to see if a debugger is attached
+Sets peb->BeingDebugged to 0x8f, crashes the game if its not set to 0x8f
+Debuggers that try to hide or don't will change BeingDebugged to 0x0 or 0x1
+To be able to debug the game with visual studio you would need to modify it so it doesnt catch every exception
+Same goes with x64dbg or any other debugger, modifications are needed to let it pass exceptions to the game
+
+On startup & runtime will try to call NtClose with handle id's such as 0xfffffffffffffffc and 0x12345 (lol)
+This will create an EXCEPTION_INVALID_HANDLE exception which arxan's VEH will intercept and detect that a debugger is attached 
+Found this by creating a minimal debugger and seeing what exceptions were being caught
 */
 
 /* anti dll injection
@@ -24,6 +34,10 @@ Reverse Kernel32ThreadInitThunkFunction function ptr being replaced
 
 /* detection methods
 Calling RestoreNtdllDbgFunctions early will crash the game eventually because they check if the ntdll dbg functions got restored
+    arxan will also hook ntdll debug functions and set kernel32 exitprocess to them
+    will check for their checksum at runtime by getting the addr location of every dbg function
+    then incrementing it and checking what the byte is
+
 Checks for cheat engine & reclass at runtime, will close the game at around 2-5 minutes if found
 */
 
@@ -151,17 +165,4 @@ arxan on start up jmps to random ntdll function where syscall starts and jmps to
     if those modules would get free'd (which shouldnt be possible) the program will crash
 
     this prevents an user to unload modules
-*/
-
-
-
-/* TODO
-
-fetch syscall id's from ntdll so we dont have to hard define them in syscalls.h
-get path to plugin folder
-get path to loading folder
-get the size of ntdllSize
-
-
-
 */

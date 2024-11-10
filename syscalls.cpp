@@ -20,6 +20,7 @@ uint64_t AllocateVirtualMemorySysCall = 0x0;
 uint64_t ProtectVirtualMemorySysCall = 0x0;
 uint64_t NtQueryObjectSysCall = 0x0;
 uint64_t NtCreateDebugObjectSysCall = 0x0;
+uint64_t NtCloseSysCall = 0x0;
 
 void SetSyscallsFromNtdll()
 {
@@ -38,6 +39,7 @@ void SetSyscallsFromNtdll()
 		void* ProtectVirtualMemorySysCallAddr	= (void*)GetProcAddress(ntdllModule, "NtProtectVirtualMemory");
 		void* NtQueryObjectAddr					= (void*)GetProcAddress(ntdllModule, "NtQueryObject");
 		void* NtCreateDebugObjectAddr			= (void*)GetProcAddress(ntdllModule, "NtCreateDebugObject");
+		void* NtCloseAddr						= (void*)GetProcAddress(ntdllModule, "NtClose");
 
 		SetInformationSysCall			= *(uint32_t*)((char*)NtSetInformationThreadAddr + 0x4);
 		CreateThreadSysCall				= *(uint32_t*)((char*)NtCreateThreadAddr + 0x4);
@@ -50,5 +52,6 @@ void SetSyscallsFromNtdll()
 		ProtectVirtualMemorySysCall		= *(uint32_t*)((char*)ProtectVirtualMemorySysCallAddr + 0x4);
 		NtQueryObjectSysCall			= *(uint32_t*)((char*)NtQueryObjectAddr + 0x4);
 		NtCreateDebugObjectSysCall		= *(uint32_t*)((char*)NtCreateDebugObjectAddr + 0x4);
+		NtCloseSysCall					= *(uint32_t*)((char*)NtCloseAddr + 0x4);
 	}
 }

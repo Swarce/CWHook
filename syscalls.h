@@ -38,3 +38,4 @@ extern uint64_t AllocateVirtualMemorySysCall;
 extern uint64_t ProtectVirtualMemorySysCall;
 extern uint64_t NtQueryObjectSysCall;
 extern uint64_t NtCreateDebugObjectSysCall;
+extern uint64_t NtCloseSysCall;

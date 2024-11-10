@@ -286,6 +286,28 @@ NTSTATUS ntdllSyscallCreateThreadEx(PHANDLE ThreadHandle, NTSTATUS syscallResult
 	return syscallResult;
 }
 
+NTSTATUS NTAPI ntdllSyscallNtClose(HANDLE Handle)
+{
+	OBJECT_HANDLE_FLAG_INFORMATION flags;
+	NTSTATUS Status;
+	Status = NtQueryObject(Handle, ObjectHandleFlagInformation, &flags, sizeof(OBJECT_HANDLE_FLAG_INFORMATION), nullptr);
+
+	if (NT_SUCCESS(Status))
+	{
+		if (flags.ProtectFromClose)
+		{
+			printf("not closable\n");
+			return STATUS_HANDLE_NOT_CLOSABLE;
+		}
+
+		// do syscall so we dont recursively call ntclose hook
+		return 0x1337;
+	}
+
+	printf("invalid handle: %llx\n", Handle);
+	return STATUS_INVALID_HANDLE;
+}
+
 void ntdllQueryInformationProcess(PROCESSINFOCLASS ProcessInformationClass, PVOID ProcessInformation)
 {
 	switch(ProcessInformationClass)
@@ -377,6 +399,8 @@ void NtdllAsmStub()
 	asmjit::Label QueryInformation = a.newLabel();
 	asmjit::Label CreateThreadEx = a.newLabel();
 	asmjit::Label RegularSyscall = a.newLabel();
+	asmjit::Label NtClose = a.newLabel();
+	asmjit::Label NtClose_L1 = a.newLabel();
 	asmjit::Label NtQueryObject = a.newLabel();
 	asmjit::Label NtQueryObject_L1 = a.newLabel();
 	asmjit::Label QueryInformationProcess = a.newLabel();
@@ -397,6 +421,8 @@ void NtdllAsmStub()
 	a.je(CreateThreadEx);
 	a.cmp(rax, NtQueryObjectSysCall);
 	a.je(NtQueryObject);
+	a.cmp(rax, NtCloseSysCall);
+	a.je(NtClose);
 
 	a.cmp(rax, QueryInformationProcessSysCall);
 	a.je(QueryInformationProcess);
@@ -579,6 +605,28 @@ void NtdllAsmStub()
 
 	a.bind(NtQueryObject_L1);
 		a.mov(rax, 0xC0000005);
+		a.ret();
+
+	a.bind(NtClose);
+	//	a.jmp(DEBUG);
+
+	/*
+		pushad64();
+		a.sub(rsp, 0x28);
+		a.call(ntdllSyscallNtClose);
+		a.add(rsp, 0x28);
+		popad64();
+	*/
+		a.cmp(rcx, 0xfffffffffffffffc);
+		a.je(NtClose_L1);
+		a.cmp(rcx, 0x12345);
+		a.je(NtClose_L1);
+
+		a.jmp(RegularSyscall);
+		a.ret();
+
+	a.bind(NtClose_L1);
+		a.mov(rax, 0);
 		a.ret();
 
 
