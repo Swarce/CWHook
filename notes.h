@@ -20,8 +20,14 @@ Hooks KiUserApcDispatcher
 Creates numerous exceptions to see if a debugger is attached
 Sets peb->BeingDebugged to 0x8f, crashes the game if its not set to 0x8f
 Debuggers that try to hide or don't will change BeingDebugged to 0x0 or 0x1
-To be able to debug the game with visual studio you would need to modify it so it doesnt catch every exception
-Same goes with x64dbg or any other debugger, modifications are needed to let it pass exceptions to the game
+To be able to debug the game with visual studio you would need to modify it so it doesnt catch illegal instructions such as UD2
+Arxan uses UD2 to check if a debugger is attached and will catch the exception with their VEH
+Arxan detects being suspended and waking up from a breakpoint exception. 
+Game usually runs for a while after a breakpoint was hit and resumed until it eventually closes itself
+
+Cheat engine's debugger can breakpoint as well but usually ends up freezing cheat engine after too many breakpoint exceptions, VEH debugger works but will clear the 4th hwbp which is needed to bypass ntdll inline syscall arxan stuff.
+Ida pro's windows debugger behaves the same way as x64dbg.
+Windbg has trouble to break the application in general.
 
 On startup & runtime will try to call NtClose with handle id's such as 0xfffffffffffffffc and 0x12345 (lol)
 This will create an EXCEPTION_INVALID_HANDLE exception which arxan's VEH will intercept and detect that a debugger is attached 
