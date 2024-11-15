@@ -28,6 +28,8 @@ Game usually runs for a while after a breakpoint was hit and resumed until it ev
 Cheat engine's debugger can breakpoint as well but usually ends up freezing cheat engine after too many breakpoint exceptions, VEH debugger works but will clear the 4th hwbp which is needed to bypass ntdll inline syscall arxan stuff.
 Ida pro's windows debugger behaves the same way as x64dbg.
 Windbg has trouble to break the application in general.
+I assume when we try to apply a breakpoint in any debugger it has to start catching STATUS_BREAKPOINT exceptions to intercept when a program executes a int3 instruction, however that also means that arxan's way of inserting ud2 instructions into the executable means we will also catch those which their VEH/SEH wants to catch but can't, meaning the debugger will then start to get detected.
+If that's the case we would need to nop the ud2's out and create integrity fixes for those locations
 
 On startup & runtime will try to call NtClose with handle id's such as 0xfffffffffffffffc and 0x12345 (lol)
 This will create an EXCEPTION_INVALID_HANDLE exception which arxan's VEH will intercept and detect that a debugger is attached 
