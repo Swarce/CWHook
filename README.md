@@ -21,7 +21,7 @@ I would highly recommend for people that are interested to learn how this works 
 There are a few extra things that Arxan does which prevents the integrity check fixes from momo to work on Cold War. 
 For that reason alone I have made a page documenting all the things I've learned from reverse engineering Arxan while working on this project.
 
-You can read it here.
+You can read it [here](NOTES.md).
 
 While this does circumvent the integrity checks for the most part, on very rare occasions at startup Arxan does some extra additional checks on the locations where the inline hooks are placed resulting in the program crashing. I've described the details about it in the page documenting Arxan's behavior.
 
