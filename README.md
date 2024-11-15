@@ -37,8 +37,19 @@ Demonstration:
 
 
 ## Credits
-Software...
+momo5502
+Geoff Chappell
 
-Blog posts...
+http://undocumented.ntinternals.net/
+https://github.com/winsiderss/phnt
+https://www.pinvoke.dev/
+https://anti-debug.checkpoint.com/
+https://secret.club/
+https://0xpat.github.io/
+https://unprotect.it/
+https://www.vergiliusproject.com/
 
-Websites...
+[x64dbg ](https://github.com/x64dbg/x64dbg)
+[reclass](https://github.com/ReClassNET/ReClass.NET)
+[cheatengine](https://github.com/cheat-engine/cheat-engine)
+[idapro](https://hex-rays.com/ida-pro)
