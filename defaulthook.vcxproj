@@ -45,11 +45,11 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>D:\games\BOCWLatest\</OutDir>
+    <OutDir>$(ProjectDir)\Release</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>D:\games\BOCWLatest\</OutDir>
+    <OutDir>$(ProjectDir)\Release</OutDir>
     <TargetName>powrprof</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
