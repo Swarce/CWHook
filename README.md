@@ -38,8 +38,10 @@ Demonstration:
 
 ## Credits
 momo5502
+
 Geoff Chappell
 
+```
 http://undocumented.ntinternals.net/
 https://github.com/winsiderss/phnt
 https://www.pinvoke.dev/
@@ -49,7 +51,8 @@ https://0xpat.github.io/
 https://unprotect.it/
 https://www.vergiliusproject.com/
 
-[x64dbg ](https://github.com/x64dbg/x64dbg)
-[reclass](https://github.com/ReClassNET/ReClass.NET)
-[cheatengine](https://github.com/cheat-engine/cheat-engine)
-[idapro](https://hex-rays.com/ida-pro)
+https://github.com/x64dbg/x64dbg
+https://github.com/ReClassNET/ReClass.NET
+https://github.com/cheat-engine/cheat-engine
+https://hex-rays.com/ida-pro
+```
