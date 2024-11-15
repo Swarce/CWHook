@@ -33,7 +33,8 @@ This should ease development productivity for anyone who's interested in writing
 
 Demonstration:
 
-[![Watch the video](https://i.sstatic.net/Vp2cE.png)](https://i.imgur.com/UIwmt8B.mp4)
+[2024-11-13 18-58-51.webm](https://github.com/user-attachments/assets/ce5414a4-193e-4350-9ef5-ba59f62fe6df)
+
 
 ## Credits
 Software...
