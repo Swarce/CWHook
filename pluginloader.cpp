@@ -14,8 +14,6 @@
 #include <vector>
 #include <intrin.h>
 #include <string>
-#include <string_view>
-#include <iostream>
 #include <filesystem>
 
 #include "libs/loadlibrary/Loader.h"
@@ -25,29 +23,83 @@
 #include "utils.h"
 #include "systemhooks.h"
 #include "exceptions.h"
+
 #include "arxan.h"
 #include "paths.h"
 #include "pluginloader.h"
 
 std::vector<pluginFile> currentLoadedPlugins;
 
-std::string pluginPathString;
-std::string loadedPathString;
+std::string pluginPathString = "";
+std::string loadedPathString = "";
+
+void TryToLoadModule(LPVOID p)
+{
+	INT_PTR index = reinterpret_cast<INT_PTR>(p);
+
+	std::string dllPath = pluginPathString;
+	dllPath += "//";
+	dllPath += currentLoadedPlugins[index].filename.generic_string();
+	std::filesystem::path dllFilePath(dllPath);
+
+	while (true)
+	{
+		HANDLE file = CreateFile(dllFilePath.generic_string().c_str(),
+				FILE_READ_DATA,
+				FILE_SHARE_READ,
+				NULL,
+				OPEN_EXISTING,
+				FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+				NULL);
+
+		if (file != INVALID_HANDLE_VALUE)
+		{
+			BOOL result = CloseHandle(file);
+			break;
+		}
+
+		Sleep(100);
+	}
+
+	if (!FreeLibrary(currentLoadedPlugins[index].module))
+		printf("couldn't free library within the directoryWatcher\n");
+
+	// https://github.com/paskalian/WID_LoadLibrary
+	Sleep(1500);
+	UnmapViewOfFile(currentLoadedPlugins[index].module);
+	Sleep(500);
+
+	std::filesystem::copy(dllFilePath, currentLoadedPlugins[index].filepath, std::filesystem::copy_options::update_existing);
+
+	HMODULE lib = NULL;
+	do {
+		lib = LoadLibraryA(currentLoadedPlugins[index].filepath.generic_string().c_str());
+	} while (lib == NULL);
+
+	PLDR_DATA_TABLE_ENTRY moduleEntry;
+	NTSTATUS result = LdrFindEntryForAddress(lib, &moduleEntry);
+	moduleEntry->DdagNode->LoadCount = 1;
+
+	currentLoadedPlugins[index].module = lib;
+	currentLoadedPlugins[index].bOpeningFile = false;
+}
 
 void directoryWatcher()
 {
+/*
 	std::filesystem::path currentPath = std::filesystem::current_path();
 	std::string currentPathString(currentPath.generic_string());
 
-	std::string pluginPathString = currentPathString;
+	pluginPathString = currentPathString;
 	pluginPathString.append("/plugins");
 
-	std::string loadedPathString = currentPathString;
+	loadedPathString = currentPathString;
 	loadedPathString.append("/loaded");
+*/
 
 	printf("init plugin path %s\n", pluginPathString.c_str());
 	printf("init loaded path %s\n", loadedPathString.c_str());
-	
+
 	HANDLE file = CreateFile(pluginPathString.c_str(),
 		FILE_LIST_DIRECTORY,
 		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -59,11 +111,26 @@ void directoryWatcher()
 	OVERLAPPED overlapped;
 	overlapped.hEvent = CreateEvent(NULL, FALSE, 0, NULL);
 
+	const DWORD AccessFlag = FILE_NOTIFY_CHANGE_LAST_WRITE; // FILE_NOTIFY_CHANGE_LAST_ACCESS
+
 	alignas(DWORD) uint8_t change_buf[1024] = { 0 };
 	BOOL success = ReadDirectoryChangesW(
 		file, change_buf, 1024, TRUE,
+		AccessFlag,
+		NULL, &overlapped, NULL);
+	
+	if (!success)
+	{
+		printf("ReadDirectoryChangesW failed, plugin loader disabled");
+		return;
+	}
+
+	/*
+		BOOL success = ReadDirectoryChangesW(
+		file, change_buf, 1024, TRUE,
 		FILE_NOTIFY_CHANGE_LAST_WRITE,
 		NULL, &overlapped, NULL);
+	*/
 
 	while (true) {
 		DWORD result = WaitForSingleObject(overlapped.hEvent, 0);
@@ -86,9 +153,11 @@ void directoryWatcher()
 					break;
 				case FILE_ACTION_MODIFIED:
 				{
-					Sleep(500);
+					wprintf(L"Modified: %.*s\n", name_len, event->FileName);
+
 					if (wcsstr(event->FileName, L"dll") != nullptr)
 					{
+						std::wstring name2;
 						std::wstring name = event->FileName;
 
 						for (int i = 0; i < currentLoadedPlugins.size(); i++)
@@ -96,6 +165,19 @@ void directoryWatcher()
 							if (wcsstr(currentLoadedPlugins[i].filename.generic_wstring().c_str(), name.c_str()) == nullptr)
 								continue;
 
+							std::string dllPath = pluginPathString;
+							dllPath += "//";
+							dllPath += currentLoadedPlugins[i].filename.generic_string();
+							std::filesystem::path dllFilePath(dllPath);
+
+							if (currentLoadedPlugins[i].bOpeningFile == false)
+							{
+								currentLoadedPlugins[i].bOpeningFile = true;
+								CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)TryToLoadModule, reinterpret_cast<LPVOID>(i), NULL, NULL);
+							}
+
+
+						/*
 							if (!FreeLibrary(currentLoadedPlugins[i].module))
 								printf("couldn't free library within the directoryWatcher\n");
 
@@ -121,6 +203,9 @@ void directoryWatcher()
 							moduleEntry->DdagNode->LoadCount = 1;
 
 							currentLoadedPlugins[i].module = lib;
+						*/
+
+
 						}
 					}
 
@@ -145,9 +230,9 @@ void directoryWatcher()
 			}
 
 			// Queue the next event
-			BOOL success = ReadDirectoryChangesW(
+			ReadDirectoryChangesW(
 				file, change_buf, 1024, TRUE,
-				FILE_NOTIFY_CHANGE_LAST_WRITE,
+				AccessFlag,
 				NULL, &overlapped, NULL);
 		}
 	}
@@ -158,10 +243,10 @@ void InitializePluginLoader()
 	std::filesystem::path currentPath = std::filesystem::current_path();
 	std::string currentPathString(currentPath.generic_string());
 
-	std::string pluginPathString = currentPathString;
+	pluginPathString = currentPathString;
 	pluginPathString.append("/plugins");
 
-	std::string loadedPathString = currentPathString;
+	loadedPathString = currentPathString;
 	loadedPathString.append("/loaded");
 
 	if (!std::filesystem::is_directory(pluginPathString))
@@ -195,7 +280,6 @@ void InitializePluginLoader()
 		if (filePath.string().find(".dll") != std::string::npos)
 		{
 			lib = LoadLibraryA(filePath.generic_string().c_str());
-			filePath.filename();
 
 			printf("library loaded %llx\n", lib);
 
@@ -211,7 +295,7 @@ void InitializePluginLoader()
 			// ours however is compiled as a dynamic loaded library, this prevents us from being able to unload our library
 			// we have to manually modify the loadcount to be 1 to be able to unload it, which isn't a proper fix to the issue
 			PLDR_DATA_TABLE_ENTRY moduleEntry;
-			NTSTATUS result = LdrFindEntryForAddress(lib, &moduleEntry);
+			LdrFindEntryForAddress(lib, &moduleEntry);
 			moduleEntry->DdagNode->LoadCount = 1;
 
 			currentLoadedPlugins.push_back({ filePath.filename(), filePath, lib });
